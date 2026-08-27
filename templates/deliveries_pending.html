@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pending Deliveries · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:18px;margin-bottom:16px;}
+  .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .card-head .receipt-no{font-family:'Fraunces',serif;font-size:15px;font-weight:600;}
+  .card-head .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);}
+  table{width:100%;border-collapse:collapse;margin-top:6px;}
+  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--rule);font-size:12px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:9.5px;text-transform:uppercase;color:var(--ink-soft);}
+  td.num, th.num{text-align:right;}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;}
+  .pill.us{color:var(--paid);border-color:var(--paid);background:var(--paid-soft);}
+  .pill.du{color:var(--overdue);border-color:var(--overdue);background:var(--overdue-soft);}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:6px 12px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .btn.reject{background:var(--overdue);border-color:var(--overdue);}
+  .actions{display:flex;gap:8px;margin-top:10px;}
+  .flash{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .empty-state{padding:50px 20px;text-align:center;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/deliveries">&larr; Saved Deliveries</a>
+    {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}
+  </div>
+  <h1>Pending Deliveries</h1>
+  <div class="subtitle">Only US-tagged items affect stock, and only once approved here</div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if items %}
+  {% for item in items %}
+  <div class="card">
+    <div class="card-head">
+      <div class="receipt-no">{{ item.receipt.receipt_no }}</div>
+      <div class="meta">{{ item.receipt.customer_name }} · {{ item.receipt.date }} · submitted by {{ item.receipt.created_by }}</div>
+    </div>
+    <table>
+      <thead><tr><th>Item</th><th class="num">Qty</th><th>Stock</th></tr></thead>
+      <tbody>
+        {% for l in item.lines %}
+        <tr>
+          <td>{{ l.description }}</td>
+          <td class="num">{{ l.qty }}</td>
+          <td><span class="pill {{ 'us' if l.update_stock else 'du' }}">{{ 'US' if l.update_stock else 'DU' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions">
+      <form method="post" action="/deliveries/pending/{{ item.receipt.id }}/approve">
+        <button class="btn" type="submit">Approve</button>
+      </form>
+      <form method="post" action="/deliveries/pending/{{ item.receipt.id }}/reject"
+            onsubmit="return confirm('Reject this delivery? No stock is affected either way.');">
+        <button class="btn reject" type="submit">Reject</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty-state">No pending deliveries.</div>
+  {% endif %}
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

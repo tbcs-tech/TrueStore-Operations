@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ 'Edit' if existing else 'Add' }} Product · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:560px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:24px;margin:0 0 20px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;}
+  .field-row{display:flex;gap:12px;flex-wrap:wrap;}
+  .field-row > div{flex:1;min-width:140px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:14px 0 5px;}
+  input, select{width:100%;font-size:14px;padding:10px 11px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .btn{margin-top:22px;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:11px 20px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .flash{background:var(--overdue-soft);color:var(--overdue);border:1px solid var(--overdue);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .hint{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);margin-top:4px;}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav"><a href="/products/manage">&larr; Products</a>{% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  <h1>{{ 'Edit' if existing else 'Add' }} Product</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="card">
+    <form method="post" id="productForm">
+      <label for="sheet">Category</label>
+      <input type="text" id="sheet" name="sheet" list="sheetList"
+             value="{{ (form.sheet if form else existing.sheet) if (form or existing) else '' }}" required>
+      <datalist id="sheetList">
+        {% for s in sheets %}<option value="{{ s }}">{% endfor %}
+      </datalist>
+      <div class="hint">Pick an existing category or type a new one.</div>
+
+      <label for="item_name">Item Name</label>
+      <input type="text" id="item_name" name="item_name" value="{{ (form.item_name if form else existing.item_name) if (form or existing) else '' }}" required>
+
+      <label for="item_description">Description (optional)</label>
+      <input type="text" id="item_description" name="item_description" value="{{ (form.item_description if form else existing.item_description) if (form or existing) else '' }}">
+
+      <div class="field-row">
+        <div>
+          <label for="item_code">Item Code</label>
+          <input type="text" id="item_code" name="item_code" value="{{ (form.item_code if form else existing.item_code) if (form or existing) else '' }}">
+        </div>
+        <div>
+          <label for="hsn">HSN/SAC</label>
+          <input type="text" id="hsn" name="hsn" value="{{ (form.hsn if form else existing.hsn) if (form or existing) else '' }}">
+        </div>
+        <div>
+          <label for="mrp">MRP</label>
+          <input type="text" id="mrp" name="mrp" value="{{ (form.mrp if form else existing.mrp) if (form or existing) else '' }}">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label for="quantity">Stock Quantity</label>
+          <input type="number" id="quantity" name="quantity" step="1" value="{{ (form.quantity if form else existing.quantity) if (form or existing) else 0 }}">
+        </div>
+        <div>
+          <label for="gst_pct">GST %</label>
+          <input type="number" id="gst_pct" name="gst_pct" step="1" value="{{ (form.gst_pct if form else existing.gst_pct) if (form or existing) else 0 }}">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label for="cost_price">Cost Price</label>
+          <input type="number" id="cost_price" name="cost_price" step="1" value="{{ (form.cost_price if form else existing.cost_price) if (form or existing) else 0 }}">
+        </div>
+        <div>
+          <label for="sale_price">Sale Price</label>
+          <input type="number" id="sale_price" name="sale_price" step="1" value="{{ (form.sale_price if form else existing.sale_price) if (form or existing) else 0 }}">
+        </div>
+      </div>
+
+      <button class="btn" type="submit">{{ 'Save Changes' if existing else 'Add Product' }}</button>
+    </form>
+  </div>
+
+  {% if custom_fields %}
+  <div class="card">
+    <h2>Custom Fields</h2>
+    {% for f in custom_fields %}
+    <label for="cf_{{ f.field_key }}">{{ f.field_label }}</label>
+    <input type="{{ 'number' if f.field_type=='number' else 'text' }}"
+           id="cf_{{ f.field_key }}" name="cf_{{ f.field_key }}"
+           value="{{ (form.get('cf_' + f.field_key, '') if form else custom_values.get(f.field_key, '')) }}"
+           form="productForm">
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

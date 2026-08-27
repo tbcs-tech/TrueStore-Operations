@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ party.name }} · Ledger · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;}
+  .stat-card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:16px 18px;flex:1;min-width:150px;}
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:22px;font-weight:600;}
+  .stat-card .value.positive{color:var(--paid);}
+  .stat-card .value.negative{color:var(--overdue);}
+  table{width:100%;border-collapse:collapse;background:var(--paper-raised);border:1px solid var(--rule-strong);}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);background:var(--paper);}
+  td.num, th.num{text-align:right;}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;}
+  .pill.paid{color:var(--paid);border-color:var(--paid);background:var(--paid-soft);}
+  .pill.unpaid{color:var(--overdue);border-color:var(--overdue);background:var(--overdue-soft);}
+  .type-tag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
+  .amt.credit, .amt.owed{color:var(--ink);}
+  .amt.debit{color:var(--overdue);}
+  .empty-state{padding:50px 20px;text-align:center;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/parties?type={{ party_type }}">&larr; {{ 'Customers' if party_type=='customer' else 'Vendors' }}</a>
+    {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}
+  </div>
+  <h1>{{ party.name }}</h1>
+  <div class="subtitle">
+    {{ party.customer_id if party_type=='customer' else party.vendor_id }}
+    {% if party.category %} · {{ party.category }}{% endif %}
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="label">Wallet Balance</div>
+      <div class="value {{ 'positive' if balance >= 0 else 'negative' }}">₹{{ "{:,.2f}".format(balance) }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total {{ 'Billed' if party_type=='customer' else 'Purchased' }}</div>
+      <div class="value">₹{{ "{:,.2f}".format(total_billed) }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Currently Unpaid</div>
+      <div class="value {{ 'negative' if total_unpaid > 0 }}">₹{{ "{:,.2f}".format(total_unpaid) }}</div>
+    </div>
+  </div>
+
+  {% if timeline %}
+  <table>
+    <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead>
+    <tbody id="ledgerTbody">
+      {% for t in timeline %}
+      <tr>
+        <td>{{ t.date }}</td>
+        <td class="type-tag">{{ t.type }}</td>
+        <td>{{ t.reference }}</td>
+        <td class="num amt {{ t.direction }}">
+          {% if t.direction == 'debit' %}-{% elif t.direction == 'credit' %}+{% endif %}₹{{ "{:,.2f}".format(t.amount) }}
+        </td>
+        <td>{% if t.status %}<span class="pill {{ t.status }}">{{ t.status }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">No activity yet.</div>
+  {% endif %}
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+<script>InfiniteScroll.attach("#ledgerTbody", {chunkSize: 40});</script>
+</body>
+</html>

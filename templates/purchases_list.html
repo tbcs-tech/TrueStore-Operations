@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saved Purchases · TrueStore Operations</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+  input, select{font-size:13px;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn.small{padding:5px 10px;font-size:11px;}
+  .btn.outline{background:transparent;color:var(--ink);}
+  .btn.danger{background:var(--overdue);border-color:var(--overdue);}
+  table{width:100%;border-collapse:collapse;background:var(--paper-raised);border:1px solid var(--rule-strong);}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);background:var(--paper);}
+  td.num, th.num{text-align:right;}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;}
+  .pill.paid{color:var(--paid);border-color:var(--paid);background:var(--paid-soft);}
+  .pill.unpaid{color:var(--overdue);border-color:var(--overdue);background:var(--overdue-soft);}
+  .pill.partial{color:#8a6d1f;border-color:#8a6d1f;background:#f5ecd4;}
+  .actions{display:flex;gap:6px;}
+  .flash{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .result-count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-bottom:10px;}
+  .tool-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
+  .tool-nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:8px 14px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:var(--paper-raised);
+    color:var(--ink);text-decoration:none;
+  }
+  .tool-nav a.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .tool-nav a:hover:not(.active){background:var(--paper);}
+</style>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/home">&larr; TrueStore Operations</a>
+    {% if logged_in_user.role != 'accountant' %}<a href="/purchases">+ New Purchase</a>{% endif %}
+  {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  {% if logged_in_user and logged_in_user.role == 'field_staff' %}
+  <div class="tool-nav">
+    <a href="/money-requests">💵 Money Requests</a>
+    <a href="/purchases">📦 New Purchase</a>
+    <a href="/purchases/list" class="active">📋 Saved Purchases</a>
+    <a href="/deliveries/new">🚚 New Delivery</a>
+    <a href="/deliveries">📃 Saved Deliveries</a>
+    <a href="/products/new">🏷 Add Product</a>
+  </div>
+  {% endif %}
+
+  <h1>Saved Purchases</h1>
+  <div class="subtitle">Stock-in history from vendors</div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <form class="filter-bar" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search purchase # or vendor...">
+    <select name="status">
+      <option value="all" {{ 'selected' if status=='all' }}>All statuses</option>
+      <option value="unpaid" {{ 'selected' if status=='unpaid' }}>Unpaid</option>
+      <option value="paid" {{ 'selected' if status=='paid' }}>Paid</option>
+    </select>
+    <button class="btn" type="submit">Filter</button>
+  </form>
+
+  <div class="result-count">{{ bills|length }} of {{ total_count }} purchase(s)</div>
+
+  <table>
+    <thead>
+      <tr><th>Purchase #</th><th>Date</th><th>Vendor</th><th class="num">Total</th><th>Status</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="purchasesTbody">
+      {% for b in bills %}
+      <tr>
+        <td>{{ b.purchase_no }}</td>
+        <td>{{ b.date }}</td>
+        <td>{{ b.vendor_name }}</td>
+        <td class="num">₹{{ "{:,.2f}".format(b.total) }}</td>
+        <td>
+          <span class="pill {{ b.status }}">{{ b.status }}</span>
+          {% if b.status != 'paid' %}
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:2px;">
+            {% if b.amount_paid > 0 %}₹{{ "{:,.2f}".format(b.amount_paid) }} of ₹{{ "{:,.2f}".format(b.total) }} paid{% endif %}
+            {% if logged_in_user.role != 'accountant' %}
+            <a href="#" onclick="openPaymentModal('{{ b.purchase_no }}', {{ b.total }}, {{ b.amount_paid }}, '{{ b.vendor_id }}'); return false;" style="color:var(--ink);text-decoration:underline;">Record Payment</a>
+            {% endif %}
+          </div>
+          {% endif %}
+        </td>
+        <td>
+          <div class="actions">
+            <a class="btn small outline" href="/purchases/pdf/{{ b.file_name }}" target="_blank">Receipt</a>
+            {% if logged_in_user.role != 'accountant' %}
+            <a class="btn small outline" href="/purchases/edit/{{ b.purchase_no }}">Edit</a>
+            <form method="post" action="/purchases/delete/{{ b.purchase_no }}" style="display:inline;"
+                  onsubmit="return confirm('Delete {{ b.purchase_no }}? Stock added by this purchase will be reversed.');">
+              <button class="btn small danger" type="submit">Delete</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal-overlay" id="paymentModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(28,35,33,0.55);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--paper-raised);border:1px solid var(--ink);padding:24px 26px;border-radius:2px;width:320px;">
+    <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin-bottom:4px;">Record Payment</div>
+    <div id="paymentModalMeta" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-bottom:14px;"></div>
+
+    <label style="display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;">Amount</label>
+    <input type="number" id="paymentAmountInput" step="1" min="1" style="width:100%;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;margin-bottom:12px;">
+
+    <label style="display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;">Payment date</label>
+    <input type="date" id="paymentDateInput" style="width:100%;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;margin-bottom:12px;">
+
+    <div id="vendorWalletPayRow" style="display:none;margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="payFromVendorWalletCheck">
+        <span id="vendorWalletPayLabel">Pay from vendor wallet balance</span>
+      </label>
+    </div>
+
+    <div id="paymentModalError" style="color:var(--overdue);font-size:11.5px;margin-bottom:10px;display:none;"></div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" type="button" onclick="closePaymentModal()">Cancel</button>
+      <button class="btn" type="button" style="background:var(--ink);color:var(--paper);" onclick="submitPayment()">Record</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/infinite_scroll.js?v=1"></script>
+<script>InfiniteScroll.attach("#purchasesTbody", {chunkSize: 40});</script>
+<script>
+let pendingPurchaseNo = null;
+let pendingRemaining = 0;
+
+function openPaymentModal(purchaseNo, total, amountPaid, vendorId){
+  pendingPurchaseNo = purchaseNo;
+  pendingRemaining = Math.round((total - amountPaid) * 100) / 100;
+
+  document.getElementById('paymentModalMeta').textContent =
+    '₹' + amountPaid.toFixed(2) + ' of ₹' + total.toFixed(2) + ' paid so far · ₹' + pendingRemaining.toFixed(2) + ' remaining';
+  document.getElementById('paymentAmountInput').value = pendingRemaining;
+  document.getElementById('paymentAmountInput').max = pendingRemaining;
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('paymentDateInput').value = today;
+  document.getElementById('paymentModalError').style.display = 'none';
+
+  const walletRow = document.getElementById('vendorWalletPayRow');
+  const walletCheck = document.getElementById('payFromVendorWalletCheck');
+  walletCheck.checked = false;
+  walletRow.style.display = 'none';
+
+  if(vendorId){
+    fetch('/parties/vendors/api/wallet-balance/' + encodeURIComponent(vendorId))
+      .then(r => r.json()).then(res => {
+        if(res.ok && res.balance > 0){
+          document.getElementById('vendorWalletPayLabel').textContent =
+            'Pay from vendor wallet balance (₹' + res.balance.toFixed(2) + ' available)';
+          walletRow.style.display = 'block';
+        }
+      }).catch(() => {});
+  }
+  document.getElementById('paymentModalOverlay').style.display = 'flex';
+}
+
+function closePaymentModal(){
+  document.getElementById('paymentModalOverlay').style.display = 'none';
+  pendingPurchaseNo = null;
+}
+
+function submitPayment(){
+  const errEl = document.getElementById('paymentModalError');
+  errEl.style.display = 'none';
+  const amount = parseFloat(document.getElementById('paymentAmountInput').value);
+  const date = document.getElementById('paymentDateInput').value;
+  if(!pendingPurchaseNo || isNaN(amount) || amount <= 0){
+    errEl.textContent = 'Enter a valid amount.'; errEl.style.display = 'block'; return;
+  }
+  if(amount > pendingRemaining + 0.01){
+    errEl.textContent = `Amount can't exceed the remaining balance (₹${pendingRemaining.toFixed(2)}).`;
+    errEl.style.display = 'block'; return;
+  }
+  const payFromWallet = document.getElementById('payFromVendorWalletCheck').checked;
+
+  fetch('/purchases/' + encodeURIComponent(pendingPurchaseNo) + '/record-payment', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({amount: amount, payment_date: date, paid_via: payFromWallet ? 'vendor_wallet' : 'cash'})
+  }).then(r => r.json()).then(data => {
+    if(data.ok){ window.location.reload(); }
+    else { errEl.textContent = data.error || 'Failed to record payment.'; errEl.style.display = 'block'; }
+  }).catch(() => { errEl.textContent = 'Network error.'; errEl.style.display = 'block'; });
+}
+
+document.getElementById('paymentModalOverlay').addEventListener('click', function(e){
+  if(e.target === this){ closePaymentModal(); }
+});
+</script>
+</body>
+</html>

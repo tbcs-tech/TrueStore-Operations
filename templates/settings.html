@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — TrueStore Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #F6F4EF;
+    --paper-raised: #FCFBF8;
+    --ink: #1C2321;
+    --ink-soft: #5B6360;
+    --rule: #D8D3C7;
+    --rule-strong: #B7AF9E;
+    --overdue: #A23C33;
+    --margin-green: #3E6B58;
+    --accent: #C08A2E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Inter', sans-serif; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width:1100px; margin:0 auto; padding:44px 28px 80px; }
+  header.top{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:2px solid var(--ink); padding-bottom:18px; margin-bottom:26px;
+  }
+  h1{
+    font-family:'Fraunces', serif; font-weight:600; font-size:32px; margin:0;
+    letter-spacing:-0.01em;
+  }
+  .back-link{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px;
+    color:var(--ink); text-decoration:none; border:1px solid var(--ink);
+    padding:8px 14px; border-radius:2px;
+  }
+  .back-link:hover{ background:var(--ink); color:var(--paper); }
+
+  .flash{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px;
+    background:#DCE7E0; color:var(--margin-green); border:1px solid var(--margin-green);
+    padding:8px 14px; border-radius:2px; margin-bottom:18px; display:inline-block;
+  }
+
+  h2{
+    font-family:'Fraunces', serif; font-weight:600; font-size:20px;
+    margin:38px 0 14px;
+  }
+  .section-eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase;
+    letter-spacing:.09em; color:var(--ink-soft); margin-bottom:4px;
+  }
+
+  /* Coordinators */
+  .coord-list{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .coord-pill{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px;
+    background:var(--paper-raised); border:1px solid var(--rule-strong);
+    padding:6px 12px; border-radius:20px;
+  }
+  .add-coord-form{ display:flex; gap:8px; }
+  .add-coord-form input[type=text]{
+    font-family:'IBM Plex Mono', monospace; font-size:13px;
+    border:1px solid var(--rule-strong); background:var(--paper-raised);
+    padding:9px 12px; border-radius:2px; width:220px;
+  }
+  .btn{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px;
+    background:var(--ink); color:var(--paper); border:1px solid var(--ink);
+    padding:9px 16px; border-radius:2px; cursor:pointer;
+  }
+  .btn:hover{ background:#333; }
+  .btn.secondary{ background:var(--paper-raised); color:var(--ink); }
+  .btn.secondary:hover{ background:#EFEBE1; }
+
+  /* Party table */
+  table.party-table{ width:100%; border-collapse:collapse; border-top:2px solid var(--ink); }
+  table.party-table th{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--ink-soft); text-align:left;
+    padding:10px 10px; border-bottom:1px solid var(--rule-strong);
+  }
+  table.party-table td{
+    padding:8px 10px; border-bottom:1px solid var(--rule);
+    font-size:13px;
+  }
+  table.party-table tr:hover td{ background:#F1EEE5; }
+  table.party-table input[type=text], table.party-table select{
+    font-family:'Inter', sans-serif; font-size:13px;
+    border:1px solid var(--rule-strong); background:var(--paper-raised);
+    padding:6px 8px; border-radius:2px; width:100%;
+  }
+  table.party-table .name-cell{
+    font-family:'Fraunces', serif; font-weight:500; font-size:14.5px;
+    white-space:nowrap;
+  }
+  td.save-cell{ text-align:right; white-space:nowrap; }
+  .btn.small{ padding:6px 12px; font-size:11.5px; }
+</style>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Party Settings</h1>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <a class="back-link" href="{{ url_for('dashboard') }}">← Back to ledger</a>
+      {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="section-eyebrow">Business Profile</div>
+  <h2 style="margin-top:6px;">Invoice &amp; PDF Branding</h2>
+  <p style="font-size:13px;color:var(--ink-soft);margin-bottom:12px;">
+    These details appear on all generated invoices, purchase receipts, and delivery receipts.
+  </p>
+  <form method="post" action="/settings/business-profile" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;max-width:700px;margin-bottom:24px;">
+    <label style="font-size:12px;font-weight:600;">Business Name
+      <input name="business_name" value="{{ business_profile.business_name }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">Tagline
+      <input name="tagline" value="{{ business_profile.tagline }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">GSTIN
+      <input name="gstin" value="{{ business_profile.gstin }}" class="field" style="width:100%;margin-top:2px;" placeholder="e.g. 20AABCT1234A1Z5">
+    </label>
+    <label style="font-size:12px;font-weight:600;">Phone
+      <input name="phone" value="{{ business_profile.phone }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">Address Line 1
+      <input name="address_line1" value="{{ business_profile.address_line1 }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">Address Line 2
+      <input name="address_line2" value="{{ business_profile.address_line2 }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">State
+      <input name="state" value="{{ business_profile.state }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">State Code
+      <input name="state_code" value="{{ business_profile.state_code }}" class="field" style="width:100%;margin-top:2px;" placeholder="e.g. 20">
+    </label>
+    <label style="font-size:12px;font-weight:600;">Email
+      <input name="email" value="{{ business_profile.email }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <div></div>
+    <div style="grid-column:1/-1;border-top:1px solid var(--rule);padding-top:10px;margin-top:4px;">
+      <span style="font-size:12px;font-weight:600;color:var(--ink-soft);">Bank Details (shown on invoice footer)</span>
+    </div>
+    <label style="font-size:12px;font-weight:600;">Bank Name
+      <input name="bank_name" value="{{ business_profile.bank_name }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">Account Number
+      <input name="bank_account" value="{{ business_profile.bank_account }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">IFSC Code
+      <input name="bank_ifsc" value="{{ business_profile.bank_ifsc }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <label style="font-size:12px;font-weight:600;">Branch
+      <input name="bank_branch" value="{{ business_profile.bank_branch }}" class="field" style="width:100%;margin-top:2px;">
+    </label>
+    <div style="grid-column:1/-1;margin-top:6px;">
+      <button type="submit" class="btn">Save Business Profile</button>
+    </div>
+  </form>
+
+  <div class="section-eyebrow">Database</div>
+  <h2 style="margin-top:6px;">Live data (SQLite — replaces Excel as the source of truth)</h2>
+  <div style="font-size:13px;color:var(--ink-soft,#5c645f);margin-bottom:10px;">
+    {{ db_stats.bills }} bills · {{ db_stats.products }} products · {{ db_stats.customers }} customers ·
+    {{ db_stats.vendors }} vendors in the database.
+    {% if sales_log_exists and billdesk_exists %}
+      Re-running the migration is safe — it upserts products/customers/vendors and only
+      adds bills that aren't already in the database (matched by file name).
+    {% endif %}
+  </div>
+  <form action="{{ url_for('settings_migrate') }}" method="post">
+    <button class="btn" type="submit" {% if not (sales_log_exists and billdesk_exists) %}disabled{% endif %}>
+      Run migration from Excel
+    </button>
+    {% if not sales_log_exists %}<span style="font-size:12px;color:var(--ink-soft,#5c645f);"> — no sales_log.xlsx found</span>{% endif %}
+    {% if not billdesk_exists %}<span style="font-size:12px;color:var(--ink-soft,#5c645f);"> — no billdesk.xlsx found (upload via New Bill)</span>{% endif %}
+  </form>
+
+  <div class="section-eyebrow" style="margin-top:34px;">Custom Fields</div>
+  <h2 style="margin-top:6px;">Extra attributes for products, customers, vendors</h2>
+  <a class="btn" href="/settings/custom-fields">Manage Custom Fields</a>
+
+  <div class="section-eyebrow" style="margin-top:34px;">Customer Categories</div>
+  <h2 style="margin-top:6px;">Bank/group options for the customer filter and Add/Edit form</h2>
+  <div class="coord-list">
+    {% for c in customer_categories %}
+    <span class="coord-pill">
+      {{ c.label }}
+      <form method="post" action="/settings/customer-categories/{{ c.id }}/delete" style="display:inline;">
+        <button type="submit" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 4px;">✕</button>
+      </form>
+    </span>
+    {% endfor %}
+  </div>
+  <form method="post" action="/settings/customer-categories" style="margin-top:10px;display:flex;gap:8px;">
+    <input type="text" name="label" placeholder="New category (e.g. HDFC)" required>
+    <button class="btn" type="submit">Add</button>
+  </form>
+
+  <div class="section-eyebrow" style="margin-top:34px;">Vendor Categories</div>
+  <h2 style="margin-top:6px;">Supplier-brand options for the vendor filter and Add/Edit form</h2>
+  <div class="coord-list">
+    {% for c in vendor_categories %}
+    <span class="coord-pill">
+      {{ c.label }}
+      <form method="post" action="/settings/vendor-categories/{{ c.id }}/delete" style="display:inline;">
+        <button type="submit" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 4px;">✕</button>
+      </form>
+    </span>
+    {% endfor %}
+  </div>
+  <form method="post" action="/settings/vendor-categories" style="margin-top:10px;display:flex;gap:8px;">
+    <input type="text" name="label" placeholder="New category (e.g. Camlin)" required>
+    <button class="btn" type="submit">Add</button>
+  </form>
+
+  <div class="section-eyebrow" style="margin-top:34px;">Money Request Reasons</div>
+  <h2 style="margin-top:6px;">Reasons field staff can pick from</h2>
+  <div class="coord-list">
+    {% for r in money_request_reasons %}
+    <span class="coord-pill">
+      {{ r.label }}
+      <form method="post" action="/settings/money-request-reasons/{{ r.id }}/delete" style="display:inline;">
+        <button type="submit" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 4px;">✕</button>
+      </form>
+    </span>
+    {% endfor %}
+  </div>
+  <form method="post" action="/settings/money-request-reasons" style="margin-top:10px;display:flex;gap:8px;">
+    <input type="text" name="label" placeholder="New reason (e.g. Transport)" required>
+    <button class="btn" type="submit">Add</button>
+  </form>
+
+  <div class="section-eyebrow" style="margin-top:34px;">Coordinators</div>
+  <h2 style="margin-top:6px;">Manage coordinator list</h2>
+  <div class="coord-list">
+    {% for c in coordinators %}
+      <span class="coord-pill">{{ c }}</span>
+    {% endfor %}
+  </div>
+  <form class="add-coord-form" action="{{ url_for('settings_coordinator') }}" method="post">
+    <input type="text" name="coordinator_name" placeholder="New coordinator name" required>
+    <button class="btn" type="submit">Add coordinator</button>
+  </form>
+
+  <div class="section-eyebrow" style="margin-top:34px;">Groups</div>
+  <h2 style="margin-top:6px;">Manage group list</h2>
+  <div class="coord-list">
+    {% for g in groups %}
+      <span class="coord-pill">{{ g }}</span>
+    {% else %}
+      <span class="coord-pill" style="opacity:.5;">No groups yet</span>
+    {% endfor %}
+  </div>
+  <form class="add-coord-form" action="{{ url_for('settings_group') }}" method="post">
+    <input type="text" name="group_name" placeholder="New group name" required>
+    <button class="btn" type="submit">Add group</button>
+  </form>
+
+  <div class="section-eyebrow" style="margin-top:38px;">Party directory</div>
+  <h2 style="margin-top:6px;">Contact info, group, location &amp; coordinator per party</h2>
+
+  <table class="party-table">
+    <thead>
+      <tr>
+        <th style="width:20%;">Party name</th>
+        <th style="width:15%;">Contact number</th>
+        <th style="width:15%;">Group by</th>
+        <th style="width:15%;">Location</th>
+        <th style="width:17%;">Coordinator</th>
+        <th style="width:8%;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for name, p in parties.items() %}
+      {% set rid = "party-form-" ~ loop.index %}
+      <tr>
+        <td class="name-cell">{{ name }}</td>
+        <td><input form="{{ rid }}" type="text" name="contact_number" value="{{ p.contact_number or '' }}" placeholder="10-digit number"></td>
+        <td>
+          <select form="{{ rid }}" name="group_by">
+            <option value="" {% if not p.group_by %}selected{% endif %}>— none —</option>
+            {% for g in groups %}
+              <option value="{{ g }}" {% if p.group_by == g %}selected{% endif %}>{{ g }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td><input form="{{ rid }}" type="text" name="location" value="{{ p.location or '' }}" placeholder="City / branch"></td>
+        <td>
+          <select form="{{ rid }}" name="coordinator">
+            <option value="" {% if not p.coordinator %}selected{% endif %}>— none —</option>
+            {% for c in coordinators %}
+              <option value="{{ c }}" {% if p.coordinator == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td class="save-cell">
+          <form id="{{ rid }}" action="{{ url_for('settings_party') }}" method="post">
+            <input type="hidden" name="name" value="{{ name }}">
+            <button class="btn small" type="submit">Save</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

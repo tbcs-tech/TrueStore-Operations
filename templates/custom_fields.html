@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Custom Fields · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:700px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .type-tabs{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden;width:fit-content;margin-bottom:20px;}
+  .type-tabs a{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 16px;text-decoration:none;color:var(--ink);background:var(--paper-raised);text-transform:capitalize;}
+  .type-tabs a.active{background:var(--ink);color:var(--paper);}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-size:15px;margin:0 0 12px;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--rule-strong);color:var(--ink-soft);}
+  .empty-state{padding:20px;text-align:center;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12.5px;}
+  .add-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+  input, select{font-size:13px;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  input[name=label]{flex:1;min-width:180px;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .btn.reject{background:var(--overdue);border-color:var(--overdue);padding:4px 8px;font-size:10px;}
+  .flash{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .hint{font-size:12.5px;color:var(--ink-soft);margin-bottom:6px;}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav"><a href="/settings">&larr; Settings</a>{% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  <h1>Custom Fields</h1>
+  <div class="subtitle">Extra attributes shown on the Add/Edit forms for each entity type</div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="type-tabs">
+    {% for t in entity_types %}
+    <a class="{{ 'active' if entity_type==t }}" href="/settings/custom-fields?type={{ t }}">{{ t }}s</a>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h2>Fields for {{ entity_type }}s</h2>
+    {% if fields %}
+    <table>
+      <thead><tr><th>Label</th><th>Type</th><th>Key</th><th></th></tr></thead>
+      <tbody>
+        {% for f in fields %}
+        <tr>
+          <td>{{ f.field_label }}</td>
+          <td><span class="pill">{{ f.field_type }}</span></td>
+          <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ f.field_key }}</td>
+          <td>
+            <form method="post" action="/settings/custom-fields/{{ f.id }}/delete"
+                  onsubmit="return confirm('Remove this field? Any values stored for it will be deleted too.');">
+              <input type="hidden" name="entity_type" value="{{ entity_type }}">
+              <button class="btn reject" type="submit">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">No custom fields defined for {{ entity_type }}s yet.</div>
+    {% endif %}
+
+    <form method="post" action="/settings/custom-fields/add" class="add-row">
+      <input type="hidden" name="entity_type" value="{{ entity_type }}">
+      <input type="text" name="label" placeholder="Field label (e.g. Warranty Months)" required>
+      <select name="field_type">
+        {% for ft in field_types %}<option value="{{ ft }}">{{ ft }}</option>{% endfor %}
+      </select>
+      <button class="btn" type="submit">Add Field</button>
+    </form>
+    <div class="hint" style="margin-top:8px;">The field's storage key is generated automatically from the label.</div>
+  </div>
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wallet · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/card_picker.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:24px;margin:0 0 20px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-size:15px;margin:0 0 12px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-bottom:4px;}
+  input, select{font-size:13px;padding:8px 9px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);width:100%;}
+  .field-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px;}
+  .field{flex:1;min-width:150px;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 16px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{padding:8px;text-align:left;border-bottom:1px solid var(--rule);font-size:13px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);}
+  td.num, th.num{text-align:right;}
+  .balance-hero{font-family:'Fraunces',serif;font-size:32px;font-weight:600;}
+  .balance-hero.positive{color:var(--paid);}
+  .balance-hero.negative{color:var(--overdue);}
+  .flash{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:2px 8px;border-radius:10px;border:1px solid;}
+  .pill.credit{color:var(--paid);border-color:var(--paid);background:var(--paid-soft);}
+  .pill.debit{color:var(--overdue);border-color:var(--overdue);background:var(--overdue-soft);}
+  datalist{}
+</style>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav"><a href="/home">&larr; TrueStore Operations</a>{% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  <h1>Customer Wallet</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="card">
+    <h2>Look up a customer</h2>
+    <form method="get">
+      <div class="field-row">
+        <div class="field">
+          <label for="customer_id">Customer ID</label>
+          <input type="text" id="customer_id" name="customer_id" list="customerList" value="{{ selected_customer_id }}" placeholder="Type to search...">
+          <datalist id="customerList">
+            {% for c in customers %}<option value="{{ c.customer_id }}">{{ c.name }}</option>{% endfor %}
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="walletCategoryFilter">Bank/Group</label>
+          <select id="walletCategoryFilter" onchange="filterWalletDatalist()">
+            <option value="">All banks/groups</option>
+          </select>
+        </div>
+        <button class="btn" type="button" onclick="browseCustomers()">⊞ Browse</button>
+        <button class="btn" type="submit">Look up</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="/static/card_picker.js?v=4"></script>
+  <script>
+    const walletCustomers = {{ customers | tojson }};
+    let walletCategoryOptions = [];
+
+    document.addEventListener('DOMContentLoaded', function(){
+      fetch('/parties/customers/api/categories').then(r => r.json()).then(res => {
+        if(res.ok){
+          walletCategoryOptions = res.categories;
+          const catSelect = document.getElementById('walletCategoryFilter');
+          catSelect.innerHTML = '<option value="">All banks/groups</option>' +
+            res.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+      });
+    });
+
+    function filterWalletDatalist(){
+      const cat = document.getElementById('walletCategoryFilter').value;
+      const datalist = document.getElementById('customerList');
+      const filtered = cat ? walletCustomers.filter(c => (c.category || '').toLowerCase() === cat.toLowerCase()) : walletCustomers;
+      datalist.innerHTML = filtered.map(c => `<option value="${c.customer_id}">${c.name}</option>`).join('');
+    }
+
+    function browseCustomers(){
+      CardPicker.open({
+        title: 'Browse Customers',
+        items: walletCustomers,
+        searchPlaceholder: 'Search name or customer ID...',
+        categories: walletCategoryOptions,
+        categoryLabel: 'All banks/groups',
+        getCategory: function(c){ return c.category; },
+        getSearchText: function(c){ return (c.name || '') + ' ' + (c.customer_id || ''); },
+        renderCard: function(c){
+          return {
+            title: c.name,
+            subtitle: c.customer_id,
+            lines: [
+              {label: 'Address', value: c.address_details || '\u2014'},
+              {label: 'GSTN', value: c.gstn || 'Unregistered'},
+            ].concat(customFieldLines(c.custom_fields)),
+          };
+        },
+        onSelect: function(c){ window.location.href = '/wallet?customer_id=' + encodeURIComponent(c.customer_id); },
+      });
+    }
+  </script>
+
+  {% if selected_customer_id %}
+  <div class="card">
+    <h2>{{ selected_customer_id }}</h2>
+    <div class="balance-hero {{ 'positive' if balance >= 0 else 'negative' }}">₹{{ "{:,.2f}".format(balance) }}</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">current balance</div>
+  </div>
+
+  <div class="card">
+    <h2>Add entry</h2>
+    <form method="post" action="/wallet/entry">
+      <input type="hidden" name="customer_id" value="{{ selected_customer_id }}">
+      <div class="field-row">
+        <div class="field">
+          <label>Type</label>
+          <select name="entry_type" required>
+            <option value="credit">Credit (customer paid in advance)</option>
+            <option value="debit">Debit (used against a bill / withdrawn)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Amount (₹)</label>
+          <input type="number" name="amount" step="1" min="1" required>
+        </div>
+        <div class="field">
+          <label>Note</label>
+          <input type="text" name="note" placeholder="e.g. advance payment 21/08">
+        </div>
+        <button class="btn" type="submit">Add</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>History</h2>
+    {% if history %}
+    <table>
+      <thead><tr><th>Date</th><th>Type</th><th class="num">Amount</th><th>Note</th><th>By</th></tr></thead>
+      <tbody>
+        {% for h in history %}
+        <tr>
+          <td>{{ h.created_at }}</td>
+          <td><span class="pill {{ h.entry_type }}">{{ h.entry_type }}</span></td>
+          <td class="num">₹{{ "{:,.2f}".format(h.amount) }}</td>
+          <td>{{ h.note }}</td>
+          <td>{{ h.created_by }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="color:var(--ink-soft);font-size:13px;">No transactions yet.</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>All customers with a balance</h2>
+    {% if all_balances %}
+    <table>
+      <thead><tr><th>Customer ID</th><th>Name</th><th class="num">Balance</th></tr></thead>
+      <tbody>
+        {% for b in all_balances %}
+        <tr>
+          <td><a href="/wallet?customer_id={{ b.customer_id }}">{{ b.customer_id }}</a></td>
+          <td>{{ b.customer_name }}</td>
+          <td class="num">₹{{ "{:,.2f}".format(b.balance) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="color:var(--ink-soft);font-size:13px;">No wallet activity yet.</div>
+    {% endif %}
+  </div>
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

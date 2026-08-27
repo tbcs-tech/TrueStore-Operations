@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salary · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  h2.section{font-family:'Fraunces',serif;font-size:16px;margin:28px 0 12px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:16px 18px;margin-bottom:12px;}
+  .card-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+  .emp-name{font-family:'Fraunces',serif;font-size:15px;font-weight:600;}
+  .emp-meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;}
+  .pill.due{color:var(--overdue);border-color:var(--overdue);background:var(--overdue-soft);}
+  .pill.approved{color:var(--ink-soft);border-color:var(--rule-strong);background:var(--paper);}
+  .pill.paid{color:var(--paid);border-color:var(--paid);background:var(--paid-soft);}
+  .approve-form{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;}
+  input, select{font-size:13px;padding:7px 9px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  input.amount{width:110px;}
+  input.note{flex:1;min-width:150px;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:7px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .flash{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  table{width:100%;border-collapse:collapse;background:var(--paper-raised);border:1px solid var(--rule-strong);}
+  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);background:var(--paper);}
+  td.num, th.num{text-align:right;}
+  .empty-state{padding:30px 20px;text-align:center;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/admin/users">&larr; Users</a>
+    {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}
+  </div>
+  <h1>Salary</h1>
+  <div class="subtitle">Employees with a joining date set are tracked here, one pay period ("YYYY-MM") at a time</div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <h2 class="section">This period ({{ employees[0].current_period if employees else '' }})</h2>
+  {% if employees %}
+    {% for e in employees %}
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="emp-name">{{ e.full_name or e.username }}</div>
+          <div class="emp-meta">{{ e.username }} · joined {{ e.joining_date }}{% if e.monthly_salary %} · usual ₹{{ "{:,.2f}".format(e.monthly_salary) }}/month{% endif %}</div>
+        </div>
+        {% if e.due %}
+          <span class="pill due">Due — not yet processed</span>
+        {% elif e.current_payment.status == 'approved' %}
+          <span class="pill approved">Approved, not yet paid</span>
+        {% else %}
+          <span class="pill paid">Paid {{ e.current_payment.paid_at[:10] if e.current_payment.paid_at else '' }}</span>
+        {% endif %}
+      </div>
+
+      {% if e.due %}
+      <form class="approve-form" method="post" action="/salary/{{ e.username }}/{{ e.current_period }}/approve">
+        <input type="number" name="amount" class="amount" step="1" min="1" value="{{ e.monthly_salary or '' }}" placeholder="Amount" required>
+        <input type="text" name="note" class="note" placeholder="Note (optional)">
+        <button class="btn" type="submit">Approve Amount</button>
+      </form>
+      {% elif e.current_payment.status == 'approved' %}
+      <div class="approve-form">
+        <span class="emp-meta">Approved: ₹{{ "{:,.2f}".format(e.current_payment.amount) }}{% if e.current_payment.note %} — {{ e.current_payment.note }}{% endif %}</span>
+        <form method="post" action="/salary/{{ e.current_payment.id }}/mark-paid" style="margin-left:auto;">
+          <button class="btn" type="submit">Mark Paid</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="empty-state">No employees have a joining date set yet — add one from Manage Users.</div>
+  {% endif %}
+
+  <h2 class="section">Payment History</h2>
+  {% if payments %}
+  <table>
+    <thead><tr><th>Employee</th><th>Period</th><th class="num">Amount</th><th>Status</th><th>Note</th></tr></thead>
+    <tbody id="salaryHistoryTbody">
+      {% for p in payments %}
+      <tr>
+        <td>{{ p.username }}</td>
+        <td>{{ p.period }}</td>
+        <td class="num">₹{{ "{:,.2f}".format(p.amount) }}</td>
+        <td><span class="pill {{ p.status }}">{{ p.status }}</span></td>
+        <td>{{ p.note }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">No salary payments recorded yet.</div>
+  {% endif %}
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+<script>InfiniteScroll.attach("#salaryHistoryTbody", {chunkSize: 40});</script>
+</body>
+</html>

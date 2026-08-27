@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit {{ bill.purchase_no }} · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/card_picker.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:24px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-size:15px;margin:0 0 12px;}
+  table{width:100%;border-collapse:collapse;margin-top:6px;}
+  th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);}
+  td.num, th.num{text-align:right;}
+  .qty-input{width:80px;padding:5px 6px;font-size:12.5px;}
+  .remove-btn{background:none;border:none;color:var(--overdue);cursor:pointer;font-size:14px;}
+  .autocomplete{position:relative;}
+  .ac-results{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--rule-strong);max-height:220px;overflow-y:auto;z-index:50;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1);}
+  .ac-results.open{display:block;}
+  .ac-item{padding:8px 10px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--rule);}
+  .ac-item:hover{background:var(--paper);}
+  input{font-size:13px;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);width:100%;}
+  .totals-box{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule-strong);text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13px;}
+  .totals-box .grand{font-size:17px;font-weight:600;font-family:'Fraunces',serif;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 18px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .banner{padding:12px 16px;border-radius:2px;font-size:13px;margin-bottom:16px;display:none;}
+  .banner.warn{background:var(--overdue-soft);color:var(--overdue);border:1px solid var(--overdue);}
+  .banner.success{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav"><a href="/purchases/list">&larr; Saved Purchases</a>{% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  <h1>Edit {{ bill.purchase_no }}</h1>
+  <div class="subtitle">{{ bill.vendor_name }} · {{ bill.date }}</div>
+
+  <div id="successBanner" class="banner success"></div>
+  <div id="errorBanner" class="banner warn"></div>
+
+  <div class="card">
+    <h2>Items</h2>
+    <div class="autocomplete">
+      <input type="text" id="itemSearch" placeholder="Search product name to add..." autocomplete="off">
+      <div class="ac-results" id="itemResults"></div>
+    </div>
+    <button class="btn" type="button" style="margin-top:8px;padding:6px 12px;font-size:11px;" onclick="browseProducts()">⊞ Browse products</button>
+
+    <table>
+      <thead>
+        <tr><th>Description</th><th>HSN</th><th class="num">GST%</th><th class="num">Qty</th><th class="num">Cost Rate</th><th class="num">Amount</th><th></th></tr>
+      </thead>
+      <tbody id="cartBody"></tbody>
+    </table>
+    <div class="totals-box">
+      <div>Taxable Amount: <span id="totTaxable">₹0.00</span></div>
+      <div>CGST: <span id="totCgst">₹0.00</span></div>
+      <div>SGST: <span id="totSgst">₹0.00</span></div>
+      <div class="grand">Grand Total: <span id="totGrand">₹0.00</span></div>
+    </div>
+  </div>
+
+  <button class="btn" id="saveBtn" onclick="saveBill()">Save Changes</button>
+</div>
+
+<script src="/static/card_picker.js?v=4"></script>
+<script>
+let products = [];
+let cart = {{ existing_lines | tojson }}.map(l => ({
+  id: l.product_id, sheet: '', description: l.description, hsn: l.hsn,
+  gst_pct: l.gst_pct, cost_rate: l.cost_rate, qty: l.qty,
+}));
+
+fetch('/purchases/api/products').then(r => r.json()).then(res => { if(res.ok){ products = res.products; } renderCart(); });
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+const itemSearch = document.getElementById('itemSearch');
+const itemResults = document.getElementById('itemResults');
+itemSearch.addEventListener('input', function(){
+  const q = this.value.trim().toLowerCase();
+  if(q.length < 2){ itemResults.classList.remove('open'); return; }
+  const matches = products.filter(p => (p.item_name || '').toLowerCase().includes(q) || (p.sheet || '').toLowerCase().includes(q)).slice(0, 25);
+  itemResults.innerHTML = matches.map(p =>
+    `<div class="ac-item" onclick='addToCart(${p.id})'>
+      <div>${escapeHtml(p.sheet)} ${escapeHtml(p.item_name)} ${escapeHtml(p.item_description || '')}</div>
+      ${p.approved === false ? '<div style="font-size:10.5px;color:var(--overdue);">pending admin approval</div>' : ''}
+    </div>`
+  ).join('');
+  itemResults.classList.toggle('open', matches.length > 0);
+});
+document.addEventListener('click', e => { if(!itemSearch.contains(e.target) && !itemResults.contains(e.target)){ itemResults.classList.remove('open'); } });
+
+function addToCart(id){
+  const p = products.find(x => x.id === id);
+  if(!p) return;
+  const existing = cart.find(c => c.id === id);
+  if(existing){ existing.qty += 1; }
+  else {
+    cart.push({
+      id: p.id, sheet: p.sheet,
+      description: (p.sheet + ' ' + (p.item_name||'') + ' ' + (p.item_description||'')).replace(/ +/g,' ').trim(),
+      hsn: (p.hsn || '').slice(0,4), gst_pct: parseFloat(p.gst_pct || 0),
+      cost_rate: parseFloat(p.cost_price || 0), qty: 1,
+    });
+  }
+  itemSearch.value = ''; itemResults.classList.remove('open');
+  renderCart();
+}
+function removeFromCart(i){ cart.splice(i, 1); renderCart(); }
+function updateQty(i, v){ const q = parseFloat(v); cart[i].qty = isNaN(q) || q <= 0 ? 1 : q; renderCart(); }
+function updateCostRate(i, v){ const r = parseFloat(v); cart[i].cost_rate = isNaN(r) || r < 0 ? 0 : r; renderCart(); }
+
+function renderCart(){
+  const tbody = document.getElementById('cartBody');
+  let rows = '';
+  const buckets = {};
+  cart.forEach((item, i) => {
+    const amount = Math.round(item.cost_rate * item.qty * 100) / 100;
+    const gst = Math.round(item.gst_pct);
+    buckets[gst] = (buckets[gst] || 0) + amount;
+    rows += `<tr>
+      <td>${escapeHtml(item.description)}</td><td>${escapeHtml(item.hsn)}</td>
+      <td class="num">${item.gst_pct}</td>
+      <td class="num"><input class="qty-input" type="number" min="1" step="1" value="${item.qty}" onchange="updateQty(${i}, this.value)"></td>
+      <td class="num"><input class="qty-input" type="number" min="0" step="1" value="${item.cost_rate}" onchange="updateCostRate(${i}, this.value)"></td>
+      <td class="num">₹${amount.toFixed(2)}</td>
+      <td><button class="remove-btn" onclick="removeFromCart(${i})">✕</button></td>
+    </tr>`;
+  });
+  tbody.innerHTML = rows;
+
+  let ttaxamt = 0, cgst = 0, sgst = 0;
+  Object.keys(buckets).forEach(gst => {
+    const g = parseFloat(gst);
+    const taxable = Math.round(buckets[gst] * 100) / 100;
+    if(g > 0){ const half = Math.round(taxable * g / 100 / 2 * 100) / 100; cgst += half; sgst += half; }
+    ttaxamt += taxable;
+  });
+  ttaxamt = Math.round(ttaxamt * 100) / 100; cgst = Math.round(cgst * 100) / 100; sgst = Math.round(sgst * 100) / 100;
+  const grand = Math.round((ttaxamt + cgst + sgst) * 100) / 100;
+  document.getElementById('totTaxable').textContent = '₹' + ttaxamt.toFixed(2);
+  document.getElementById('totCgst').textContent = '₹' + cgst.toFixed(2);
+  document.getElementById('totSgst').textContent = '₹' + sgst.toFixed(2);
+  document.getElementById('totGrand').textContent = '₹' + grand.toFixed(2);
+}
+
+function saveBill(){
+  document.getElementById('errorBanner').style.display = 'none';
+  document.getElementById('successBanner').style.display = 'none';
+  if(cart.length === 0){ showError('Add at least one item.'); return; }
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  fetch(window.location.pathname, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ lines: cart.map(c => ({id: c.id, qty: c.qty, cost_rate: c.cost_rate})) })
+  }).then(r => r.json()).then(res => {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+    if(!res.ok){ showError(res.error || 'Failed to save.'); return; }
+    const b = document.getElementById('successBanner');
+    b.style.display = 'block';
+    b.textContent = 'Saved — Total ₹' + res.total.toFixed(2);
+  }).catch(() => { btn.disabled = false; btn.textContent = 'Save Changes'; showError('Network error.'); });
+}
+function showError(msg){ const el = document.getElementById('errorBanner'); el.textContent = msg; el.style.display = 'block'; }
+
+function browseProducts(){
+  CardPicker.open({
+    title: 'Browse Products',
+    items: products,
+    searchPlaceholder: 'Search product name or sheet...',
+    categories: Array.from(new Set(products.map(p => p.sheet).filter(Boolean))).sort(),
+    categoryLabel: 'All categories',
+    multiSelect: true,
+    getCategory: function(p){ return p.sheet; },
+    getSearchText: function(p){ return (p.sheet || '') + ' ' + (p.item_name || '') + ' ' + (p.item_description || ''); },
+    renderCard: function(p){
+      return {
+        title: (p.sheet + ' ' + (p.item_name||'') + ' ' + (p.item_description||'')).replace(/ +/g,' ').trim(),
+        subtitle: 'GST ' + (p.gst_pct || 0) + '%',
+        lines: [
+          {label: 'Stock', value: p.quantity != null ? String(p.quantity) : '\u2014', warn: p.quantity != null && p.quantity < 0},
+          {label: 'Last cost', value: '\u20b9' + (p.cost_price || 0)},
+        ].concat(customFieldLines(p.custom_fields)).concat(p.approved === false ? [{label: 'Status', value: 'Pending admin approval', warn: true}] : []),
+      };
+    },
+    onSelect: function(p){ addToCart(p.id); },
+  });
+}
+</script>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ 'Edit' if existing else 'Add' }} {{ 'Customer' if party_type=='customer' else 'Vendor' }} · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:520px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:24px;margin:0 0 20px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:14px 0 5px;}
+  label:first-child{margin-top:0;}
+  input{width:100%;font-size:14px;padding:10px 11px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  input:disabled{background:var(--paper);color:var(--ink-soft);}
+  .btn{margin-top:22px;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:11px 20px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .flash{background:var(--overdue-soft);color:var(--overdue);border:1px solid var(--overdue);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .hint{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);margin-top:4px;}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav"><a href="/parties?type={{ party_type }}">&larr; {{ 'Customers' if party_type=='customer' else 'Vendors' }}</a>{% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  <h1>{{ 'Edit' if existing else 'Add' }} {{ 'Customer' if party_type=='customer' else 'Vendor' }}</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="card">
+    <form method="post" id="partyForm">
+      {% set id_field = 'customer_id' if party_type=='customer' else 'vendor_id' %}
+      <label for="{{ id_field }}">{{ 'Customer ID' if party_type=='customer' else 'Vendor ID' }}</label>
+      <input type="text" id="{{ id_field }}" name="{{ id_field }}"
+             value="{{ (form[id_field] if form else existing[id_field]) if (form or existing) else '' }}"
+             {{ 'disabled' if existing }} required>
+      {% if existing %}
+        <input type="hidden" name="{{ id_field }}" value="{{ existing[id_field] }}">
+        <div class="hint">ID can't be changed once created (bills reference it directly).</div>
+      {% endif %}
+
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" value="{{ (form.name if form else existing.name) if (form or existing) else '' }}" required>
+
+      <label for="category">{{ 'Bank/Group' if party_type=='customer' else 'Category' }}</label>
+      {% set current_value = (form.category if form else existing.category) if (form or existing) else '' %}
+      <select id="category" name="category">
+        <option value="">— none —</option>
+        {% set ns = namespace(matched=false) %}
+        {% for opt in category_options %}
+          {% if current_value and current_value.lower() == opt.lower() %}{% set ns.matched = true %}{% endif %}
+          <option value="{{ opt }}" {{ 'selected' if current_value and current_value.lower() == opt.lower() }}>{{ opt }}</option>
+        {% endfor %}
+        {% if current_value and not ns.matched %}
+          <option value="{{ current_value }}" selected>{{ current_value }} (not in the standard list)</option>
+        {% endif %}
+      </select>
+      <div class="hint">Manage this list from Settings.</div>
+
+      <label for="contact_number">Contact Number</label>
+      <input type="text" id="contact_number" name="contact_number" value="{{ (form.contact_number if form else existing.contact_number) if (form or existing) else '' }}">
+
+      <label for="address_details">Address</label>
+      <input type="text" id="address_details" name="address_details" value="{{ (form.address_details if form else existing.address_details) if (form or existing) else '' }}">
+
+      <label for="gstn">GSTN</label>
+      <input type="text" id="gstn" name="gstn" value="{{ (form.gstn if form else existing.gstn) if (form or existing) else '' }}">
+
+      <button class="btn" type="submit">{{ 'Save Changes' if existing else 'Add ' + ('Customer' if party_type=='customer' else 'Vendor') }}</button>
+    </form>
+  </div>
+
+  {% if custom_fields %}
+  <div class="card" style="margin-top:20px;">
+    <h1 style="font-size:15px;margin:0 0 4px;">Custom Fields</h1>
+    {% for f in custom_fields %}
+    <label for="cf_{{ f.field_key }}">{{ f.field_label }}</label>
+    <input type="{{ 'number' if f.field_type=='number' else 'text' }}"
+           id="cf_{{ f.field_key }}" name="cf_{{ f.field_key }}"
+           value="{{ (form.get('cf_' + f.field_key, '') if form else custom_values.get(f.field_key, '')) }}"
+           form="partyForm">
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

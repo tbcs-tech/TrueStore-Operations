@@ -1,0 +1,33 @@
+# Database & backups (never commit real data)
+data/app.db
+data/backups/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Secrets (never commit)
+.env
+
+# Excel source files (large, already migrated to DB)
+*.xlsx
+*.xls
+
+# Record room generated files
+record_room/

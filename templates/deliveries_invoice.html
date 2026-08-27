@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convert Deliveries to Invoice · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/card_picker.css?v=4">
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 24px 100px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;font-weight:600;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:24px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin:0 0 14px;}
+  .field-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+  .field{flex:1;min-width:180px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-bottom:5px;}
+  input, select{width:100%;font-size:13px;padding:9px 11px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .autocomplete{position:relative;}
+  .ac-results{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--rule-strong);max-height:260px;overflow-y:auto;z-index:50;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1);}
+  .ac-results.open{display:block;}
+  .ac-item{padding:9px 11px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--rule);}
+  .ac-item:hover{background:var(--paper);}
+  .ac-meta{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
+  .cp-browse-btn{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:9px 14px;border-radius:2px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer;white-space:nowrap;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 18px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .btn.outline{background:transparent;color:var(--ink);}
+  .btn.small{padding:6px 12px;font-size:11px;}
+  table{width:100%;border-collapse:collapse;margin-top:6px;}
+  th,td{padding:8px 9px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);}
+  td.num, th.num{text-align:right;}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;}
+  .pill.us{color:var(--paid);border-color:var(--paid);background:var(--paid-soft);}
+  .pill.du{color:var(--overdue);border-color:var(--overdue);background:var(--overdue-soft);}
+  .group-select{width:110px;padding:5px 6px;font-size:12px;}
+  .group-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .group-card{border:1px solid var(--rule-strong);border-radius:3px;padding:16px 18px;margin-bottom:14px;background:var(--paper-raised);}
+  .group-card-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;}
+  .group-name{font-family:'Fraunces',serif;font-size:15px;font-weight:600;}
+  .group-meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);}
+  .invoice-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);}
+  .invoice-row .field{min-width:160px;}
+  #invoiceAvailability{font-family:'IBM Plex Mono',monospace;font-size:10.5px;margin-top:4px;}
+  .banner{padding:12px 16px;border-radius:2px;font-size:13px;margin-bottom:16px;display:none;}
+  .banner.warn{background:var(--overdue-soft);color:var(--overdue);border:1px solid var(--overdue);}
+  .banner.success{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);}
+  .empty-state{padding:40px 20px;text-align:center;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/deliveries">&larr; Saved Deliveries</a>
+    {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}
+  </div>
+  <h1>Convert Deliveries to Invoice</h1>
+  <div class="subtitle">Review everything delivered to a customer, group it however makes sense, then turn each group into a real GST invoice</div>
+
+  <div class="card">
+    <h2>Customer</h2>
+    <div class="field-row">
+      <div class="field autocomplete">
+        <label for="customerSearch">Search by name or customer ID</label>
+        <div style="display:flex;gap:8px;">
+          <div style="position:relative;flex:1;">
+            <input type="text" id="customerSearch" placeholder="Type to search..." autocomplete="off">
+            <div class="ac-results" id="customerResults"></div>
+          </div>
+          <select id="customerCategoryFilter" style="max-width:170px;" onchange="renderCustomerSearchResults()">
+            <option value="">All banks/groups</option>
+          </select>
+          <button class="cp-browse-btn" type="button" onclick="browseCustomers()">⊞ Browse</button>
+        </div>
+      </div>
+    </div>
+    <div id="selectedCustomerLabel" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-top:10px;"></div>
+  </div>
+
+  <div id="linesCard" class="card" style="display:none;">
+    <h2>Delivered, not yet invoiced</h2>
+    <div class="group-actions">
+      <button class="btn outline small" type="button" onclick="autoGroupByGst()">Auto-group by GST%</button>
+      <div class="field" style="max-width:220px;min-width:0;">
+        <input type="number" id="amountCapInput" step="1" min="1" placeholder="Max ₹ per group">
+      </div>
+      <button class="btn outline small" type="button" onclick="autoGroupByAmount()">Auto-group by amount</button>
+      <button class="btn outline small" type="button" onclick="addGroup()">+ Add empty group</button>
+    </div>
+
+    <table>
+      <thead><tr><th>Receipt #</th><th>Date</th><th>Item</th><th class="num">Qty</th><th>Stock</th><th class="num">GST%</th><th class="num">Amount</th><th>Group</th></tr></thead>
+      <tbody id="linesTbody"></tbody>
+    </table>
+  </div>
+
+  <div id="groupsContainer"></div>
+
+  <div id="errorBanner" class="banner warn"></div>
+  <div id="successBanner" class="banner success"></div>
+</div>
+
+<script src="/static/card_picker.js?v=4"></script>
+<script>
+let customers = [];
+let deliveryLines = [];   // all uninvoiced lines for the selected customer
+let groupCount = 0;       // group N is stored as line.group = N (1-indexed), 0 = ungrouped
+let selectedCustomerId = null;
+let selectedCustomerName = '';
+
+document.addEventListener('DOMContentLoaded', function(){
+  fetch('/bills/api/customers').then(r => r.json()).then(res => { if(res.ok){ customers = res.customers; } });
+  fetch('/parties/customers/api/categories').then(r => r.json()).then(res => {
+    if(res.ok){
+      const catSelect = document.getElementById('customerCategoryFilter');
+      catSelect.innerHTML = '<option value="">All banks/groups</option>' +
+        res.categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    }
+  });
+});
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+const customerSearch = document.getElementById('customerSearch');
+const customerResults = document.getElementById('customerResults');
+customerSearch.addEventListener('input', renderCustomerSearchResults);
+function renderCustomerSearchResults(){
+  const q = customerSearch.value.trim().toLowerCase();
+  const cat = document.getElementById('customerCategoryFilter').value;
+  if(q.length < 2 && !cat){ customerResults.classList.remove('open'); return; }
+  const matches = customers.filter(c =>
+    (!q || (c.name || '').toLowerCase().includes(q) || (c.customer_id || '').toLowerCase().includes(q)) &&
+    (!cat || (c.category || '').toLowerCase() === cat.toLowerCase())
+  ).slice(0, 20);
+  customerResults.innerHTML = matches.map(c =>
+    `<div class="ac-item" onclick='selectCustomer(${JSON.stringify(c.customer_id)}, ${JSON.stringify(c.name)})'>
+      <div>${escapeHtml(c.name)}</div>
+      <div class="ac-meta">${escapeHtml(c.customer_id)}${c.category ? ' · ' + escapeHtml(c.category) : ''}</div>
+    </div>`
+  ).join('');
+  customerResults.classList.toggle('open', matches.length > 0);
+}
+document.addEventListener('click', e => { if(!customerSearch.contains(e.target) && !customerResults.contains(e.target)){ customerResults.classList.remove('open'); } });
+
+function browseCustomers(){
+  CardPicker.open({
+    title: 'Browse Customers',
+    items: customers,
+    searchPlaceholder: 'Search name or customer ID...',
+    categories: Array.from(new Set(customers.map(c => c.category).filter(Boolean))),
+    categoryLabel: 'All banks/groups',
+    getCategory: function(c){ return c.category; },
+    getSearchText: function(c){ return (c.name || '') + ' ' + (c.customer_id || ''); },
+    renderCard: function(c){
+      return { title: c.name, subtitle: c.customer_id + (c.category ? ' \u00b7 ' + c.category : ''),
+        lines: [{label: 'Address', value: c.address_details || '\u2014'}] };
+    },
+    onSelect: function(c){ selectCustomer(c.customer_id, c.name); },
+  });
+}
+
+function selectCustomer(customerId, customerName){
+  selectedCustomerId = customerId;
+  selectedCustomerName = customerName;
+  customerSearch.value = customerName;
+  customerResults.classList.remove('open');
+  document.getElementById('selectedCustomerLabel').textContent = 'Selected: ' + customerName + ' (' + customerId + ')';
+  document.getElementById('errorBanner').style.display = 'none';
+  document.getElementById('successBanner').style.display = 'none';
+  loadDeliveryLines();
+}
+
+function loadDeliveryLines(){
+  fetch('/deliveries/invoice/api/lines/' + encodeURIComponent(selectedCustomerId)).then(r => r.json()).then(res => {
+    if(!res.ok){ showError(res.error || 'Failed to load delivered items.'); return; }
+    deliveryLines = res.lines.map(l => Object.assign({group: 0}, l));
+    groupCount = 0;
+    document.getElementById('groupsContainer').innerHTML = '';
+    document.getElementById('linesCard').style.display = deliveryLines.length ? 'block' : 'none';
+    if(deliveryLines.length === 0){
+      if(res.pending_count > 0){
+        const errEl = document.getElementById('errorBanner');
+        errEl.innerHTML = `This customer has <strong>${res.pending_count}</strong> delivery receipt(s) still ` +
+          `awaiting approval — they only become eligible for invoicing once approved. ` +
+          `<a href="/deliveries/pending" style="color:var(--overdue);text-decoration:underline;">Go approve them</a>.`;
+        errEl.style.display = 'block';
+      } else {
+        showError('Nothing delivered and not yet invoiced for this customer.');
+      }
+    }
+    renderLines();
+  }).catch(() => showError('Network error loading delivered items.'));
+}
+
+function renderLines(){
+  const tbody = document.getElementById('linesTbody');
+  const groupOptions = ['<option value="0">— none —</option>'];
+  for(let g = 1; g <= groupCount; g++){ groupOptions.push(`<option value="${g}">Group ${g}</option>`); }
+
+  tbody.innerHTML = deliveryLines.map((l, i) => `<tr>
+    <td>${escapeHtml(l.receipt_no)}</td>
+    <td>${escapeHtml(l.delivery_date)}</td>
+    <td>${escapeHtml(l.description)}</td>
+    <td class="num">${l.qty}</td>
+    <td><span class="pill ${l.update_stock ? 'us' : 'du'}">${l.update_stock ? 'US' : 'DU'}</span></td>
+    <td class="num">${l.gst_pct}</td>
+    <td class="num">₹${l.amount.toFixed(2)}</td>
+    <td>
+      <select class="group-select" onchange="setLineGroup(${i}, this.value)">
+        ${groupOptions.map(o => o.replace(`value="${l.group}"`, `value="${l.group}" selected`)).join('')}
+      </select>
+    </td>
+  </tr>`).join('');
+
+  renderGroups();
+}
+
+function setLineGroup(i, group){
+  deliveryLines[i].group = parseInt(group, 10);
+  renderGroups();
+}
+
+function addGroup(){
+  groupCount++;
+  renderLines();
+}
+
+function autoGroupByGst(){
+  const gstValues = Array.from(new Set(deliveryLines.map(l => l.gst_pct))).sort((a,b) => a-b);
+  const gstToGroup = {};
+  gstValues.forEach((g, i) => { gstToGroup[g] = i + 1; });
+  deliveryLines.forEach(l => { l.group = gstToGroup[l.gst_pct]; });
+  groupCount = gstValues.length;
+  renderLines();
+}
+
+function autoGroupByAmount(){
+  const cap = parseFloat(document.getElementById('amountCapInput').value);
+  if(!cap || cap <= 0){ showError('Enter a max amount per group first.'); return; }
+  document.getElementById('errorBanner').style.display = 'none';
+  let group = 1, runningTotal = 0;
+  deliveryLines.forEach(l => {
+    if(runningTotal > 0 && runningTotal + l.amount > cap){ group++; runningTotal = 0; }
+    l.group = group;
+    runningTotal += l.amount;
+  });
+  groupCount = group;
+  renderLines();
+}
+
+function groupTotal(g){
+  return deliveryLines.filter(l => l.group === g).reduce((sum, l) => sum + l.amount, 0);
+}
+
+function renderGroups(){
+  const container = document.getElementById('groupsContainer');
+  let html = '';
+  for(let g = 1; g <= groupCount; g++){
+    const items = deliveryLines.filter(l => l.group === g);
+    if(items.length === 0) continue;
+    const total = groupTotal(g);
+    const today = new Date().toISOString().slice(0, 10);
+    html += `<div class="group-card" id="groupCard${g}">
+      <div class="group-card-head">
+        <div>
+          <div class="group-name">Group ${g}</div>
+          <div class="group-meta">${items.length} item(s) · taxable ₹${total.toFixed(2)}</div>
+        </div>
+      </div>
+      <div class="invoice-row">
+        <div class="field">
+          <label>Bill Type</label>
+          <select id="billType${g}">
+            <option value="Tax Invoice">Tax Invoice</option>
+            <option value="Estimate">Estimate</option>
+            <option value="DirectSell">Direct Sell</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="invoiceDate${g}" value="${today}">
+        </div>
+        <div class="field">
+          <label>Invoice #</label>
+          <input type="text" id="invoiceNo${g}" oninput="checkInvoiceAvailability(${g})">
+          <div id="invoiceAvailability${g}"></div>
+        </div>
+        <button class="btn" type="button" onclick="createInvoiceForGroup(${g})">Create Invoice</button>
+      </div>
+    </div>`;
+  }
+  container.innerHTML = html;
+
+  for(let g = 1; g <= groupCount; g++){
+    const input = document.getElementById('invoiceNo' + g);
+    if(input && !input.value){ prefillInvoiceNumber(g); }
+  }
+}
+
+function prefillInvoiceNumber(g){
+  fetch('/bills/api/next-invoice-number').then(r => r.json()).then(res => {
+    if(res.ok){
+      const input = document.getElementById('invoiceNo' + g);
+      if(input){ input.value = res.suggested; checkInvoiceAvailability(g); }
+    }
+  }).catch(() => {});
+}
+
+let invoiceCheckTimers = {};
+function checkInvoiceAvailability(g){
+  const el = document.getElementById('invoiceAvailability' + g);
+  const value = document.getElementById('invoiceNo' + g).value.trim();
+  if(!el) return;
+  if(!value){ el.textContent = ''; return; }
+  clearTimeout(invoiceCheckTimers[g]);
+  el.textContent = 'Checking…'; el.style.color = 'var(--ink-soft)';
+  invoiceCheckTimers[g] = setTimeout(function(){
+    fetch('/bills/api/invoice-availability/' + encodeURIComponent(value)).then(r => r.json()).then(res => {
+      if(!res.ok) return;
+      if(res.available){ el.textContent = '✓ Available'; el.style.color = 'var(--paid)'; }
+      else { el.textContent = '✗ Already used'; el.style.color = 'var(--overdue)'; }
+    }).catch(() => { el.textContent = ''; });
+  }, 350);
+}
+
+function showError(msg){ const el = document.getElementById('errorBanner'); el.textContent = msg; el.style.display = 'block'; }
+
+function createInvoiceForGroup(g){
+  document.getElementById('errorBanner').style.display = 'none';
+  const items = deliveryLines.filter(l => l.group === g);
+  if(items.length === 0){ return; }
+  const billType = document.getElementById('billType' + g).value;
+  const dateVal = document.getElementById('invoiceDate' + g).value;
+  const invoiceNo = document.getElementById('invoiceNo' + g).value.trim();
+  const parts = dateVal.split('-');
+  const dateFormatted = parts[2] + '/' + parts[1] + '/' + parts[0];
+
+  const btn = document.querySelector(`#groupCard${g} .btn`);
+  btn.disabled = true; btn.textContent = 'Creating…';
+
+  fetch('/deliveries/invoice/create', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      customer_id: selectedCustomerId, bill_type: billType, date: dateFormatted,
+      invoice_no: invoiceNo, delivery_line_ids: items.map(l => l.line_id),
+    })
+  }).then(r => r.json()).then(res => {
+    btn.disabled = false; btn.textContent = 'Create Invoice';
+    if(!res.ok){ showError(res.error || 'Failed to create invoice.'); return; }
+    const b = document.getElementById('successBanner');
+    b.style.display = 'block';
+    b.innerHTML = `Invoice <strong>${res.invoice_no}</strong> created — total ₹${res.total.toFixed(2)}. ` +
+      `<a href="${res.pdf_url}" target="_blank" style="color:var(--paid);text-decoration:underline;">Download</a>`;
+    const doneIds = new Set(items.map(l => l.line_id));
+    deliveryLines = deliveryLines.filter(l => !doneIds.has(l.line_id));
+    renderLines();
+    if(deliveryLines.length === 0){ document.getElementById('linesCard').style.display = 'none'; }
+  }).catch(() => { btn.disabled = false; btn.textContent = 'Create Invoice'; showError('Network error.'); });
+}
+</script>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

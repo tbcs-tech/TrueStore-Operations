@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Split {{ bill.invoice_no }} · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:24px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-size:15px;margin:0 0 12px;}
+  .note{font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;line-height:1.5;}
+  .part-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+  .part-row label{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);width:60px;}
+  input, select{font-size:13px;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  input.part-amount{width:140px;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .btn.outline{background:transparent;color:var(--ink);}
+  .sum-line{font-family:'IBM Plex Mono',monospace;font-size:13px;margin-top:12px;}
+  .sum-line.ok{color:var(--paid);}
+  .sum-line.bad{color:var(--overdue);}
+  .banner{padding:12px 16px;border-radius:2px;font-size:13px;margin-bottom:16px;display:none;}
+  .banner.warn{background:var(--overdue-soft);color:var(--overdue);border:1px solid var(--overdue);}
+  .banner.success{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);}
+  table{width:100%;border-collapse:collapse;margin-top:6px;}
+  th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);}
+  td.num, th.num{text-align:right;}
+  .part-select{width:90px;}
+  .count-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;}
+  .count-row .field{display:flex;flex-direction:column;gap:4px;}
+  .count-row label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
+  .part-totals{margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .part-totals div{padding:3px 0;}
+</style>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/bills/list">&larr; Saved Bills</a>
+    {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}
+  </div>
+  <h1>Split {{ bill.invoice_no }}</h1>
+  <div class="subtitle">{{ bill.customer_name }} · Total ₹{{ "{:,.2f}".format(bill.total) }}</div>
+
+  <div id="successBanner" class="banner success"></div>
+  <div id="errorBanner" class="banner warn"></div>
+
+  {% if item_level %}
+  <div class="card">
+    <h2>Assign each item to a part</h2>
+    <div class="note">
+      Each part becomes its own bill (invoice # {{ bill.invoice_no }}a, {{ bill.invoice_no }}b, ...),
+      with tax and margin computed for real from whichever items you assign to it — not estimated.
+      The original {{ bill.invoice_no }} is deleted once the split completes. Stock isn't touched again
+      (the original sale already moved it) — this only restructures the invoicing.
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <span style="font-weight:600;font-size:13px;">Auto-assign items to parts:</span>
+      <button class="btn outline" type="button" onclick="autoGroupByGST()" title="One part per distinct GST rate">By GST %</button>
+      <button class="btn outline" type="button" onclick="autoGroupByAmountCap()" title="Bin-pack items into parts under the cap amount">By amount cap</button>
+      <input type="number" id="capInput" step="1" min="1" placeholder="Max ₹ per part" style="width:130px;padding:6px 8px;font-size:13px;border:1px solid var(--rule-strong);border-radius:2px;">
+    </div>
+    <div class="count-row">
+      <div class="field">
+        <label for="partCount">Number of parts</label>
+        <input type="number" id="partCount" step="1" min="2" max="26" value="2" onchange="rebuildPartOptions()">
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Amount</th><th>Part</th></tr></thead>
+      <tbody id="itemsTbody">
+        {% for l in existing_lines %}
+        <tr data-line-id="{{ l.id }}" data-amount="{{ l.amount }}" data-gst="{{ l.gst_pct }}">
+          <td>{{ l.description }}</td>
+          <td class="num">{{ l.qty }}</td>
+          <td class="num">₹{{ "{:,.2f}".format(l.amount) }}</td>
+          <td><select class="part-select" data-line-id="{{ l.id }}" onchange="updatePartTotals()"></select></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="part-totals" id="partTotals"></div>
+  </div>
+
+  <button class="btn" id="splitBtn" onclick="submitItemSplit()">Split Bill</button>
+
+  <script>
+    function rebuildPartOptions(){
+      const count = Math.max(2, Math.min(26, parseInt(document.getElementById('partCount').value, 10) || 2));
+      document.getElementById('partCount').value = count;
+      const letters = 'abcdefghijklmnopqrstuvwxyz'.slice(0, count).split('');
+      document.querySelectorAll('.part-select').forEach(function(sel){
+        const current = sel.value;
+        sel.innerHTML = letters.map(function(l){ return '<option value="' + l + '">Part ' + l.toUpperCase() + '</option>'; }).join('');
+        if(letters.includes(current)){ sel.value = current; }
+      });
+      updatePartTotals();
+    }
+
+    function autoGroupByGST(){
+      /* One part per distinct GST rate found across items. */
+      const rows = document.querySelectorAll('#itemsTbody tr');
+      const gstSet = new Set();
+      const rowGST = [];
+      rows.forEach(function(tr){
+        /* GST% is in the item description string indirectly; we stored it as a data attr */
+        const gst = tr.getAttribute('data-gst') || '0';
+        gstSet.add(gst);
+        rowGST.push(gst);
+      });
+      const gstKeys = Array.from(gstSet).sort(function(a,b){ return parseFloat(a)-parseFloat(b); });
+      if(gstKeys.length < 2){
+        showError('All items share the same GST rate — nothing to group by.');
+        return;
+      }
+      const letters = 'abcdefghijklmnopqrstuvwxyz';
+      document.getElementById('partCount').value = Math.min(26, gstKeys.length);
+      rebuildPartOptions();
+      rows.forEach(function(tr, i){
+        const idx = gstKeys.indexOf(rowGST[i]);
+        const sel = tr.querySelector('.part-select');
+        if(sel.querySelector('option[value="' + letters[idx] + '"]')){
+          sel.value = letters[idx];
+        }
+      });
+      updatePartTotals();
+    }
+
+    function autoGroupByAmountCap(){
+      /* First-fit-decreasing bin-packing: sort items by amount desc, assign
+         each to the first bin that has room under cap. Creates as many bins
+         as needed (max 26). */
+      const cap = parseFloat(document.getElementById('capInput').value);
+      if(!cap || cap <= 0){
+        showError('Enter a max ₹ amount per part first.');
+        return;
+      }
+      const rows = Array.from(document.querySelectorAll('#itemsTbody tr'));
+      const items = rows.map(function(tr, i){
+        return { idx: i, amount: parseFloat(tr.getAttribute('data-amount')) || 0, tr: tr };
+      });
+      /* Sort descending by amount for better packing */
+      const sorted = items.slice().sort(function(a,b){ return b.amount - a.amount; });
+      const bins = []; /* bins[i] = current total */
+      const assignment = new Array(items.length); /* index -> bin number */
+      sorted.forEach(function(item){
+        let placed = false;
+        for(let b = 0; b < bins.length; b++){
+          if(bins[b] + item.amount <= cap + 0.01){
+            bins[b] += item.amount;
+            assignment[item.idx] = b;
+            placed = true;
+            break;
+          }
+        }
+        if(!placed){
+          assignment[item.idx] = bins.length;
+          bins.push(item.amount);
+        }
+      });
+      if(bins.length < 2){
+        showError('Everything fits in one part under that cap — try a lower amount.');
+        return;
+      }
+      if(bins.length > 26){
+        showError('That cap would need ' + bins.length + ' parts (max 26). Try a higher amount.');
+        return;
+      }
+      const letters = 'abcdefghijklmnopqrstuvwxyz';
+      document.getElementById('partCount').value = bins.length;
+      rebuildPartOptions();
+      rows.forEach(function(tr, i){
+        const sel = tr.querySelector('.part-select');
+        sel.value = letters[assignment[i]];
+      });
+      updatePartTotals();
+    }
+
+    function updatePartTotals(){
+      const totals = {};
+      document.querySelectorAll('#itemsTbody tr').forEach(function(tr){
+        const sel = tr.querySelector('.part-select');
+        const amount = parseFloat(tr.getAttribute('data-amount')) || 0;
+        const letter = sel.value;
+        totals[letter] = (totals[letter] || 0) + amount;
+      });
+      const el = document.getElementById('partTotals');
+      el.innerHTML = Object.keys(totals).sort().map(function(l){
+        return '<div>Part ' + l.toUpperCase() + ': ₹' + totals[l].toFixed(2) + '</div>';
+      }).join('');
+    }
+
+    function showError(msg){ const el = document.getElementById('errorBanner'); el.textContent = msg; el.style.display = 'block'; }
+
+    function submitItemSplit(){
+      document.getElementById('errorBanner').style.display = 'none';
+      document.getElementById('successBanner').style.display = 'none';
+      const assignments = {};
+      document.querySelectorAll('.part-select').forEach(function(sel){
+        assignments[sel.getAttribute('data-line-id')] = sel.value;
+      });
+      const usedParts = new Set(Object.values(assignments));
+      if(usedParts.size < 2){ showError('Assign items to at least 2 different parts (one part currently has everything).'); return; }
+
+      const btn = document.getElementById('splitBtn');
+      btn.disabled = true; btn.textContent = 'Splitting…';
+      fetch(window.location.pathname, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ assignments: assignments })
+      }).then(function(r){ return r.json(); }).then(function(res){
+        btn.disabled = false; btn.textContent = 'Split Bill';
+        if(!res.ok){ showError(res.error || 'Split failed.'); return; }
+        const b = document.getElementById('successBanner');
+        b.style.display = 'block';
+        b.textContent = 'Created: ' + res.created.join(', ') + '. Redirecting to Saved Bills…';
+        setTimeout(function(){ window.location.href = '/bills/list'; }, 1500);
+      }).catch(function(){ btn.disabled = false; btn.textContent = 'Split Bill'; showError('Network error.'); });
+    }
+
+    rebuildPartOptions();
+  </script>
+
+  {% else %}
+  <div class="card">
+    <h2>Split into parts</h2>
+    <div class="note">
+      This bill predates item-level tracking (or has an incomplete line-item record), so it can't be
+      split item-by-item. Each part becomes its own bill (invoice # {{ bill.invoice_no }}a, {{ bill.invoice_no }}b, ...),
+      with margin and taxable amount divided proportionally to each part's share of the total.
+      The original {{ bill.invoice_no }} is deleted once the split completes. Part amounts must
+      add up exactly to ₹{{ "{:,.2f}".format(bill.total) }}.
+    </div>
+    <div id="partsContainer"></div>
+    <button class="btn outline" type="button" onclick="addPart()">+ Add part</button>
+    <div class="sum-line" id="sumLine"></div>
+  </div>
+
+  <button class="btn" id="splitBtn" onclick="submitSplit()">Split Bill</button>
+
+  <script>
+    const total = {{ bill.total }};
+    let partCount = 0;
+
+    function addPart(value){
+      partCount++;
+      const container = document.getElementById('partsContainer');
+      const row = document.createElement('div');
+      row.className = 'part-row';
+      row.innerHTML = `<label>Part ${String.fromCharCode(96 + partCount).toUpperCase()}</label>
+        <input type="number" step="1" min="1" class="part-amount" value="${value !== undefined ? value : ''}" oninput="updateSum()">`;
+      container.appendChild(row);
+      updateSum();
+    }
+
+    function updateSum(){
+      const inputs = document.querySelectorAll('.part-amount');
+      let sum = 0;
+      inputs.forEach(function(i){ sum += parseFloat(i.value) || 0; });
+      sum = Math.round(sum * 100) / 100;
+      const el = document.getElementById('sumLine');
+      const diff = Math.round((sum - total) * 100) / 100;
+      if(Math.abs(diff) < 0.01){
+        el.textContent = `Sum: ₹${sum.toFixed(2)} — matches the bill total`;
+        el.className = 'sum-line ok';
+      } else {
+        el.textContent = `Sum: ₹${sum.toFixed(2)} — ${diff > 0 ? 'over' : 'short'} by ₹${Math.abs(diff).toFixed(2)}`;
+        el.className = 'sum-line bad';
+      }
+    }
+
+    addPart((total / 2).toFixed(2));
+    addPart((total / 2).toFixed(2));
+
+    function showError(msg){ const el = document.getElementById('errorBanner'); el.textContent = msg; el.style.display = 'block'; }
+
+    function submitSplit(){
+      document.getElementById('errorBanner').style.display = 'none';
+      document.getElementById('successBanner').style.display = 'none';
+      const parts = Array.from(document.querySelectorAll('.part-amount')).map(function(i){ return parseFloat(i.value); });
+      if(parts.some(function(p){ return isNaN(p) || p <= 0; })){ showError('Every part needs a positive amount.'); return; }
+
+      const btn = document.getElementById('splitBtn');
+      btn.disabled = true; btn.textContent = 'Splitting…';
+      fetch(window.location.pathname, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ parts: parts })
+      }).then(function(r){ return r.json(); }).then(function(res){
+        btn.disabled = false; btn.textContent = 'Split Bill';
+        if(!res.ok){ showError(res.error || 'Split failed.'); return; }
+        const b = document.getElementById('successBanner');
+        b.style.display = 'block';
+        b.textContent = 'Created: ' + res.created.join(', ') + '. Redirecting to Saved Bills…';
+        setTimeout(function(){ window.location.href = '/bills/list'; }, 1500);
+      }).catch(function(){ btn.disabled = false; btn.textContent = 'Split Bill'; showError('Network error.'); });
+    }
+  </script>
+  {% endif %}
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

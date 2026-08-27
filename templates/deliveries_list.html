@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deliveries · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:800px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 20px;}
+  table{width:100%;border-collapse:collapse;background:var(--paper-raised);border:1px solid var(--rule-strong);}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);background:var(--paper);}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:5px 10px;border-radius:2px;border:1px solid var(--rule-strong);background:transparent;color:var(--ink);text-decoration:none;}
+  .btn.danger{background:#a3452e;border-color:#a3452e;color:#f3e3dd;cursor:pointer;}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;}
+  .pill.pending{color:var(--ink-soft);border-color:var(--rule-strong);background:var(--paper);}
+  .pill.approved{color:#3f6b4f;border-color:#3f6b4f;background:#e2ede4;}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .empty-state{padding:50px 20px;text-align:center;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+  .tool-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
+  .tool-nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:8px 14px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:var(--paper-raised);
+    color:var(--ink);text-decoration:none;
+  }
+  .tool-nav a.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .tool-nav a:hover:not(.active){background:var(--paper);}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/home">&larr; TrueStore Operations</a>
+    <a href="/deliveries/new">+ New Delivery</a>
+  {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  {% if logged_in_user and logged_in_user.role == 'field_staff' %}
+  <div class="tool-nav">
+    <a href="/money-requests">💵 Money Requests</a>
+    <a href="/purchases">📦 New Purchase</a>
+    <a href="/purchases/list">📋 Saved Purchases</a>
+    <a href="/deliveries/new">🚚 New Delivery</a>
+    <a href="/deliveries" class="active">📃 Saved Deliveries</a>
+    <a href="/products/new">🏷 Add Product</a>
+  </div>
+  {% endif %}
+
+  <h1>Saved Deliveries</h1>
+
+  {% if logged_in_user and logged_in_user.role == 'admin' %}
+  <div style="margin-bottom:16px;">
+    <a class="btn" href="/deliveries/pending">Pending Approval</a>
+    <a class="btn" href="/deliveries/invoice">Convert to Invoice</a>
+  </div>
+  {% endif %}
+
+  {% if receipts %}
+  <table>
+    <thead><tr><th>Receipt #</th><th>Date</th><th>Customer</th><th>Status</th><th>Invoiced</th><th>By</th><th></th></tr></thead>
+    <tbody>
+      {% for r in receipts %}
+      <tr>
+        <td>{{ r.receipt_no }}</td>
+        <td>{{ r.date }}</td>
+        <td>{{ r.customer_name }}</td>
+        <td><span class="pill {{ r.status }}">{{ r.status }}</span></td>
+        <td>
+          {% if r.invoice_status.invoiced == 0 %}
+            <span class="pill pending">not invoiced</span>
+          {% elif r.invoice_status.invoiced == r.invoice_status.total %}
+            <span class="pill approved">fully invoiced</span><br>
+            {% for inv in r.invoice_status.invoices %}
+              <a href="/bills/pdf/{{ inv.file_name }}" target="_blank" style="font-size:10.5px;">{{ inv.invoice_no }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          {% else %}
+            <span class="pill due" style="color:#8a6d1f;border-color:#8a6d1f;background:#f5ecd4;">{{ r.invoice_status.invoiced }}/{{ r.invoice_status.total }} invoiced</span><br>
+            {% for inv in r.invoice_status.invoices %}
+              <a href="/bills/pdf/{{ inv.file_name }}" target="_blank" style="font-size:10.5px;">{{ inv.invoice_no }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          {% endif %}
+        </td>
+        <td>{{ r.created_by }}</td>
+        <td>
+          <div class="actions">
+            {% if logged_in_user.role != 'admin' %}<a class="btn" href="/deliveries/pdf/{{ r.receipt_no }}?copy=customer" target="_blank">Customer Copy</a>{% endif %}
+            {% if logged_in_user.role != 'field_staff' %}<a class="btn" href="/deliveries/pdf/{{ r.receipt_no }}?copy=office" target="_blank">Office Copy</a>{% endif %}
+            <a class="btn" href="/deliveries/edit/{{ r.receipt_no }}">Edit</a>
+            <form method="post" action="/deliveries/delete/{{ r.receipt_no }}" style="display:inline;"
+                  onsubmit="return confirm('Delete {{ r.receipt_no }}?{{ ' Stock from its US items will be reversed.' if r.status == 'approved' else '' }}');">
+              <button class="btn danger" type="submit">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">No delivery receipts yet.</div>
+  {% endif %}
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Users · TrueStore Operations</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:800px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:24px;margin:0 0 20px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-size:15px;margin:0 0 12px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-bottom:4px;}
+  input, select{font-size:13px;padding:8px 9px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .field-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px;}
+  .field{flex:1;min-width:140px;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 16px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{padding:8px;text-align:left;border-bottom:1px solid var(--rule);font-size:13px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:2px 8px;border-radius:10px;border:1px solid;}
+  .pill.active{color:var(--paid);border-color:var(--paid);background:var(--paid-soft);}
+  .pill.inactive{color:var(--overdue);border-color:var(--overdue);background:var(--overdue-soft);}
+  .flash{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .toggle-btn{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:12px;font-family:'IBM Plex Mono',monospace;}
+</style>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/home">&larr; TrueStore Operations</a>
+  {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  <h1>Manage Users</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="card">
+    <h2>Add user</h2>
+    <form method="post">
+      <div class="field-row">
+        <div class="field"><label>Full name</label><input type="text" name="full_name"></div>
+        <div class="field"><label>Username</label><input type="text" name="username" required></div>
+        <div class="field"><label>Password</label><input type="password" name="password" required minlength="8"></div>
+        <div class="field">
+          <label>Role</label>
+          <select name="role" required>
+            {% for r in roles %}<option value="{{ r }}">{{ role_labels[r] }}</option>{% endfor %}
+          </select>
+        </div>
+        <button class="btn" type="submit">Add user</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>All users</h2>
+    <table>
+      <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Joining Date</th><th>Monthly Salary</th><th></th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td>{{ u.full_name }}</td>
+          <td>{{ role_labels.get(u.role, u.role) }}</td>
+          <td><span class="pill {{ 'active' if u.active else 'inactive' }}">{{ 'active' if u.active else 'disabled' }}</span></td>
+          <td colspan="2">
+            <form method="post" action="/admin/users/{{ u.id }}/employment" style="display:flex;gap:6px;align-items:center;">
+              <input type="date" name="joining_date" value="{{ u.joining_date or '' }}" style="width:130px;">
+              <input type="number" name="monthly_salary" value="{{ u.monthly_salary or '' }}" placeholder="₹/month" step="1" min="0" style="width:90px;">
+              <button class="btn" type="submit" style="padding:6px 10px;font-size:10.5px;">Save</button>
+            </form>
+          </td>
+          <td>
+            <form method="post" action="/admin/users/{{ u.id }}/toggle-active" style="display:inline;">
+              <button class="toggle-btn" type="submit">{{ 'disable' if u.active else 'enable' }}</button>
+            </form>
+            {% if u.role == 'field_staff' %}
+            <a href="/admin/users/{{ u.username }}/assignments" style="font-family:'IBM Plex Mono',monospace;font-size:11px;margin-left:8px;">Assignments</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Salary</h2>
+    <a class="btn" href="/salary">Go to Salary Dashboard</a>
+  </div>
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

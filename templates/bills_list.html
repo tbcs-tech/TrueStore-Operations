@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saved Bills · TrueStore Operations</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+  input, select{font-size:13px;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn.small{padding:5px 10px;font-size:11px;}
+  .btn.outline{background:transparent;color:var(--ink);}
+  .btn.danger{background:var(--overdue);border-color:var(--overdue);}
+  table{width:100%;border-collapse:collapse;background:var(--paper-raised);border:1px solid var(--rule-strong);}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);background:var(--paper);}
+  td.num, th.num{text-align:right;}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid;white-space:nowrap;}
+  .pill.paid{color:var(--paid);border-color:var(--paid);background:var(--paid-soft);}
+  .pill.unpaid{color:var(--overdue);border-color:var(--overdue);background:var(--overdue-soft);}
+  .actions{display:flex;gap:6px;}
+  .flash{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .result-count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-bottom:10px;}
+  .split-tag{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--ink-soft);}
+</style>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/home">&larr; TrueStore Operations</a>
+    {% if logged_in_user.role != 'accountant' %}<a href="/bills">+ New Bill</a>{% endif %}
+  {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  <h1>Saved Bills</h1>
+  <div class="subtitle">Search, edit, delete, or split any saved bill</div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <form class="filter-bar" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search invoice # or customer...">
+    <select name="status">
+      <option value="all" {{ 'selected' if status=='all' }}>All statuses</option>
+      <option value="unpaid" {{ 'selected' if status=='unpaid' }}>Unpaid</option>
+      <option value="paid" {{ 'selected' if status=='paid' }}>Paid</option>
+    </select>
+    <button class="btn" type="submit">Filter</button>
+  </form>
+
+  <div class="result-count">Showing {{ shown_count }} of {{ total_count }} bill(s)</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Invoice #</th><th>Date</th><th>Customer</th><th class="num">Total</th>
+        <th class="num">Margin</th><th>Status</th><th>Type</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="billsTbody">
+      {% for b in bills %}
+      <tr>
+        <td>{{ b.invoice_no }}{% if b.split_leg %}<span class="split-tag"> (split)</span>{% endif %}</td>
+        <td>{{ b.date }}</td>
+        <td>{{ b.customer_name }}</td>
+        <td class="num">₹{{ "{:,.2f}".format(b.total) }}</td>
+        <td class="num">₹{{ "{:,.2f}".format(b.margin) }}</td>
+        <td><span class="pill {{ b.status }}">{{ b.status }}</span></td>
+        <td>{{ b.bill_type }}</td>
+        <td>
+          <div class="actions">
+            <a class="btn small outline" href="/bills/pdf/{{ b.file_name }}" target="_blank">PDF</a>
+            {% if logged_in_user.role != 'accountant' %}
+            <a class="btn small outline" href="/bills/edit/{{ b.invoice_no }}">Edit</a>
+            {% if not b.split_leg %}<a class="btn small outline" href="/bills/split/{{ b.invoice_no }}">Split</a>{% endif %}
+            <form method="post" action="/bills/delete/{{ b.invoice_no }}" style="display:inline;"
+                  onsubmit="return confirm('Delete {{ b.invoice_no }}? This cannot be undone.');">
+              <button class="btn small danger" type="submit">Delete</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+<script>InfiniteScroll.attach("#billsTbody", {chunkSize: 40});</script>
+</body>
+</html>

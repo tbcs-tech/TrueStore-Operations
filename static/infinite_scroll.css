@@ -1,0 +1,55 @@
+/* infinite_scroll.css — shared scroll-jump buttons + progressive table reveal */
+
+.scroll-jump-stack{
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+}
+.scroll-jump-stack.visible{
+  opacity: 1;
+  pointer-events: auto;
+}
+.scroll-jump-btn{
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--ink, #1c2321);
+  background: var(--paper-raised, #fffdf8);
+  color: var(--ink, #1c2321);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .12s ease, background .12s ease;
+}
+.scroll-jump-btn:hover{
+  background: var(--ink, #1c2321);
+  color: var(--paper, #f6f3ec);
+  transform: translateY(-2px);
+}
+.scroll-jump-btn:active{
+  transform: translateY(0);
+}
+
+/* Sentinel row used to trigger loading the next chunk - invisible, just a
+   trip-wire for the IntersectionObserver. */
+.infinite-scroll-sentinel{
+  height: 1px;
+}
+.infinite-scroll-loading-row td{
+  text-align: center;
+  padding: 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-soft, #5c645f);
+}

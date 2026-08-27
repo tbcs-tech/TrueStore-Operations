@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Delivery · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/card_picker.css?v=3">
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:28px;font-weight:600;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:24px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin:0 0 14px;}
+  .field-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .field{flex:1;min-width:200px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-bottom:5px;}
+  input[type=text], input[type=date]{width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .autocomplete{position:relative;}
+  .ac-results{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--rule-strong);max-height:240px;overflow-y:auto;z-index:50;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1);}
+  .ac-results.open{display:block;}
+  .ac-item{padding:8px 10px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--rule);}
+  .ac-item:hover{background:var(--paper);}
+  table{width:100%;border-collapse:collapse;margin-top:6px;}
+  th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);}
+  td.num, th.num{text-align:right;}
+  .qty-input{width:70px;padding:5px 6px;font-size:12.5px;}
+  .remove-btn{background:none;border:none;color:var(--overdue);cursor:pointer;font-size:14px;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 18px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .btn.secondary{background:transparent;color:var(--ink);}
+  .cp-browse-btn{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:8px 12px;border-radius:2px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer;white-space:nowrap;}
+  .cp-input-with-browse{display:flex;gap:8px;align-items:flex-start;}
+  .cp-input-with-browse > div{flex:1;}
+  .empty-cart{color:var(--ink-soft);font-size:12.5px;padding:16px 0;text-align:center;}
+  .banner{padding:12px 16px;border-radius:2px;font-size:13px;margin-bottom:16px;}
+  .banner.warn{background:var(--overdue-soft);color:var(--overdue);border:1px solid var(--overdue);}
+  .banner.success{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);}
+  .result-actions{display:flex;gap:10px;margin-top:12px;}
+  .tool-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
+  .tool-nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:8px 14px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:var(--paper-raised);
+    color:var(--ink);text-decoration:none;
+  }
+  .tool-nav a.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .tool-nav a:hover:not(.active){background:var(--paper);}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/home">&larr; TrueStore Operations</a>
+    <a href="/deliveries">Saved Deliveries</a>
+  {% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  {% if logged_in_user and logged_in_user.role == 'field_staff' %}
+  <div class="tool-nav">
+    <a href="/money-requests">💵 Money Requests</a>
+    <a href="/purchases">📦 New Purchase</a>
+    <a href="/purchases/list">📋 Saved Purchases</a>
+    <a href="/deliveries/new" class="active">🚚 New Delivery</a>
+    <a href="/deliveries">📃 Saved Deliveries</a>
+    <a href="/products/new">🏷 Add Product</a>
+  </div>
+  {% endif %}
+
+  <h1>New Delivery Receipt</h1>
+  <div class="subtitle">Confirm what's being delivered — no pricing, just item + quantity</div>
+
+  <div class="card" id="successBanner" style="display:none;">
+    <div class="banner success" id="successMsg"></div>
+    <div class="result-actions">
+      <a id="viewPdfLinkCustomer" class="btn" href="#" target="_blank" {{ 'style="display:none;"' | safe if logged_in_user.role == 'admin' }}>Customer Copy</a>
+      <a id="viewPdfLinkOffice" class="btn secondary" href="#" target="_blank" {{ 'style="display:none;"' | safe if logged_in_user.role == 'field_staff' }}>Office Copy</a>
+      <button class="btn secondary" type="button" onclick="window.location.reload()">Create another delivery</button>
+    </div>
+  </div>
+
+  <div class="card" id="formCard">
+    <h2>Delivery details</h2>
+    <div class="field-row">
+      <div class="field"><label for="deliveryDate">Date</label><input type="date" id="deliveryDate"></div>
+    </div>
+    <div class="field-row">
+      <div class="field autocomplete">
+        <label for="customerSearch">Customer</label>
+        <div class="cp-input-with-browse">
+          <div style="position:relative;">
+            <input type="text" id="customerSearch" placeholder="Search by name or customer ID..." autocomplete="off">
+            <div class="ac-results" id="customerResults"></div>
+          </div>
+          <select id="customerCategoryFilter" style="max-width:170px;" onchange="renderCustomerSearchResults()">
+            <option value="">All banks/groups</option>
+          </select>
+          <button class="cp-browse-btn" type="button" onclick="browseCustomers()">⊞ Browse</button>
+        </div>
+        <input type="hidden" id="customerId">
+      </div>
+    </div>
+    <div id="selectedCustomer" style="font-size:12.5px;color:var(--ink-soft);margin-top:-4px;"></div>
+  </div>
+
+  <div class="card" id="itemsCard">
+    <h2>Items</h2>
+    <div class="field autocomplete">
+      <label for="itemSearch">Add item</label>
+      <div class="cp-input-with-browse">
+        <div style="position:relative;">
+          <input type="text" id="itemSearch" placeholder="Search product name..." autocomplete="off">
+          <div class="ac-results" id="itemResults"></div>
+        </div>
+        <button class="cp-browse-btn" type="button" onclick="browseProducts()">⊞ Browse</button>
+      </div>
+    </div>
+
+    <table id="cartTable" style="display:none;">
+      <thead><tr><th>Item</th><th class="num">Qty</th><th>Stock</th><th></th></tr></thead>
+      <tbody id="cartBody"></tbody>
+    </table>
+    <div class="empty-cart" id="emptyCart">No items added yet.</div>
+    <div class="note" style="font-size:12px;color:var(--ink-soft);margin-top:10px;line-height:1.5;">
+      <strong>US</strong> = Update Stock (counts as a real inventory movement, decremented once admin approves this receipt).
+      <strong>DU</strong> = Don't Update (delivered but not stock-tracked — e.g. an extra/informal item supplied outside the
+      billed order, common with government office supply). This receipt needs admin approval before anything happens to stock.
+    </div>
+  </div>
+
+  <div id="errorBanner" class="banner warn" style="display:none;"></div>
+  <button class="btn" id="submitBtn" onclick="submitDelivery()">Create Delivery Receipt</button>
+</div>
+
+<div id="splitStockModal" style="display:none;position:fixed;inset:0;background:rgba(28,35,33,0.55);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--paper-raised);border:1px solid var(--ink);padding:22px 24px;border-radius:2px;width:320px;">
+    <div id="splitModalTitle" style="font-family:'Fraunces',serif;font-size:15px;font-weight:600;margin-bottom:2px;"></div>
+    <div id="splitModalQty" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-bottom:12px;"></div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;line-height:1.4;">
+      Split between <strong>US</strong> (counts as stock movement once approved) and <strong>DU</strong> (delivered but not stock-tracked).
+    </div>
+    <label style="display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);margin-bottom:4px;">US quantity</label>
+    <input type="number" id="splitUsQty" min="0" step="1" style="width:100%;margin-bottom:10px;" oninput="onSplitUsInput()">
+    <label style="display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);margin-bottom:4px;">DU quantity</label>
+    <input type="number" id="splitDuQty" min="0" step="1" style="width:100%;margin-bottom:6px;" oninput="onSplitDuInput()">
+    <div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">These always add up to the total — changing one adjusts the other automatically.</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" type="button" onclick="closeSplitModal()" style="background:transparent;color:var(--ink);">Cancel</button>
+      <button class="btn" type="button" onclick="confirmSplitStock()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/card_picker.js?v=4"></script>
+<script>
+let customers = [];
+let products = [];
+let cart = [];
+let customerCategoryOptions = [];
+
+document.addEventListener('DOMContentLoaded', function(){
+  const dateInput = document.getElementById('deliveryDate');
+  if(dateInput){ dateInput.value = new Date().toISOString().slice(0,10); }
+  fetch('/bills/api/customers').then(r => r.json()).then(res => {
+    if(res.ok){ customers = res.customers; }
+  });
+  fetch('/parties/customers/api/categories').then(r => r.json()).then(res => {
+    if(res.ok){
+      customerCategoryOptions = res.categories;
+      const catSelect = document.getElementById('customerCategoryFilter');
+      catSelect.innerHTML = '<option value="">All banks/groups</option>' +
+        res.categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    }
+  });
+  fetch('/bills/api/products').then(r => r.json()).then(res => { if(res.ok){ products = res.products; } });
+});
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+const customerSearch = document.getElementById('customerSearch');
+const customerResults = document.getElementById('customerResults');
+customerSearch.addEventListener('input', renderCustomerSearchResults);
+function renderCustomerSearchResults(){
+  const q = customerSearch.value.trim().toLowerCase();
+  const cat = document.getElementById('customerCategoryFilter').value;
+  if(q.length < 2 && !cat){ customerResults.classList.remove('open'); return; }
+  const matches = customers.filter(c =>
+    (!q || (c.name || '').toLowerCase().includes(q) || (c.customer_id || '').toLowerCase().includes(q)) &&
+    (!cat || (c.category || '').toLowerCase() === cat.toLowerCase())
+  ).slice(0, 20);
+  customerResults.innerHTML = matches.map(c =>
+    `<div class="ac-item" onclick='selectCustomer(${JSON.stringify(c.customer_id)})'>
+      <div>${escapeHtml(c.name)}</div><div style="font-family:monospace;font-size:10.5px;color:var(--ink-soft);">${escapeHtml(c.customer_id)}${c.category ? ' · ' + escapeHtml(c.category) : ''}</div>
+    </div>`
+  ).join('');
+  customerResults.classList.toggle('open', matches.length > 0);
+}
+document.addEventListener('click', e => { if(!customerSearch.contains(e.target) && !customerResults.contains(e.target)){ customerResults.classList.remove('open'); } });
+
+function selectCustomer(customerId){
+  const c = customers.find(x => x.customer_id === customerId);
+  if(!c) return;
+  document.getElementById('customerId').value = c.customer_id;
+  customerSearch.value = c.name;
+  document.getElementById('selectedCustomer').textContent = c.customer_id + (c.category ? ' \u00b7 ' + c.category : '');
+  customerResults.classList.remove('open');
+}
+
+function browseCustomers(){
+  CardPicker.open({
+    title: 'Browse Customers',
+    items: customers,
+    searchPlaceholder: 'Search name or customer ID...',
+    categories: customerCategoryOptions,
+    categoryLabel: 'All banks/groups',
+    getCategory: function(c){ return c.category; },
+    getSearchText: function(c){ return (c.name || '') + ' ' + (c.customer_id || ''); },
+    renderCard: function(c){
+      return { title: c.name, subtitle: c.customer_id + (c.category ? ' \u00b7 ' + c.category : ''),
+        lines: [{label: 'Address', value: c.address_details || '\u2014'}].concat(customFieldLines(c.custom_fields)) };
+    },
+    onSelect: function(c){ selectCustomer(c.customer_id); },
+  });
+}
+
+const itemSearch = document.getElementById('itemSearch');
+const itemResults = document.getElementById('itemResults');
+itemSearch.addEventListener('input', function(){
+  const q = this.value.trim().toLowerCase();
+  if(q.length < 2){ itemResults.classList.remove('open'); return; }
+  const matches = products.filter(p => (p.item_name || '').toLowerCase().includes(q) || (p.sheet || '').toLowerCase().includes(q)).slice(0, 25);
+  itemResults.innerHTML = matches.map(p =>
+    `<div class="ac-item" onclick='addToCart(${p.id})'>
+      <div>${escapeHtml(p.sheet)} ${escapeHtml(p.item_name)} ${escapeHtml(p.item_description || '')}</div>
+      ${p.approved === false ? '<div style="font-size:10.5px;color:var(--overdue);">pending admin approval</div>' : ''}
+    </div>`
+  ).join('');
+  itemResults.classList.toggle('open', matches.length > 0);
+});
+document.addEventListener('click', e => { if(!itemSearch.contains(e.target) && !itemResults.contains(e.target)){ itemResults.classList.remove('open'); } });
+
+function browseProducts(){
+  CardPicker.open({
+    title: 'Browse Products',
+    items: products,
+    searchPlaceholder: 'Search product name or sheet...',
+    categories: Array.from(new Set(products.map(p => p.sheet).filter(Boolean))).sort(),
+    categoryLabel: 'All categories',
+    multiSelect: true,
+    getCategory: function(p){ return p.sheet; },
+    getSearchText: function(p){ return (p.sheet || '') + ' ' + (p.item_name || '') + ' ' + (p.item_description || ''); },
+    renderCard: function(p){
+      return { title: (p.sheet + ' ' + (p.item_name||'') + ' ' + (p.item_description||'')).replace(/ +/g,' ').trim(),
+        lines: [{label: 'Stock', value: p.quantity != null ? String(p.quantity) : '\u2014'}].concat(customFieldLines(p.custom_fields)).concat(p.approved === false ? [{label: 'Status', value: 'Pending admin approval', warn: true}] : []) };
+    },
+    onSelect: function(p){ addToCart(p.id); },
+  });
+}
+
+function addToCart(id){
+  const p = products.find(x => x.id === id);
+  if(!p) return;
+  const existing = cart.find(c => c.id === id);
+  if(existing){ existing.us_qty += 1; }
+  else {
+    cart.push({
+      id: p.id,
+      description: (p.sheet + ' ' + (p.item_name||'') + ' ' + (p.item_description||'')).replace(/ +/g,' ').trim(),
+      us_qty: 1, du_qty: 0,
+    });
+  }
+  itemSearch.value = ''; itemResults.classList.remove('open');
+  renderCart();
+}
+function removeFromCart(i){ cart.splice(i, 1); renderCart(); }
+function cartTotal(item){ return item.us_qty + item.du_qty; }
+
+function updateQty(i, v){
+  const newTotal = parseFloat(v);
+  const item = cart[i];
+  if(isNaN(newTotal) || newTotal <= 0){ renderCart(); return; }
+  const delta = newTotal - cartTotal(item);
+  // Apply the change to whichever side is currently in use; if the item is
+  // already split across both, the US side absorbs the change (the DU
+  // count stays exactly what was explicitly set via the split popup).
+  if(item.du_qty === 0){ item.us_qty = Math.max(0, item.us_qty + delta); }
+  else if(item.us_qty === 0){ item.du_qty = Math.max(0, item.du_qty + delta); }
+  else { item.us_qty = Math.max(0, item.us_qty + delta); }
+  renderCart();
+}
+
+let splitModalIndex = null;
+function openSplitModal(i){
+  splitModalIndex = i;
+  const item = cart[i];
+  const total = cartTotal(item);
+  document.getElementById('splitModalTitle').textContent = item.description;
+  document.getElementById('splitModalQty').textContent = 'Total quantity: ' + total;
+  document.getElementById('splitStockModal').setAttribute('data-total', total);
+  document.getElementById('splitUsQty').value = item.us_qty;
+  document.getElementById('splitDuQty').value = item.du_qty;
+  document.getElementById('splitStockModal').style.display = 'flex';
+}
+function closeSplitModal(){
+  document.getElementById('splitStockModal').style.display = 'none';
+  splitModalIndex = null;
+}
+function splitTotal(){ return parseFloat(document.getElementById('splitStockModal').getAttribute('data-total')); }
+function onSplitUsInput(){
+  const total = splitTotal();
+  let us = parseFloat(document.getElementById('splitUsQty').value);
+  if(isNaN(us)) us = 0;
+  us = Math.max(0, Math.min(total, us));
+  document.getElementById('splitUsQty').value = us;
+  document.getElementById('splitDuQty').value = total - us;
+}
+function onSplitDuInput(){
+  const total = splitTotal();
+  let du = parseFloat(document.getElementById('splitDuQty').value);
+  if(isNaN(du)) du = 0;
+  du = Math.max(0, Math.min(total, du));
+  document.getElementById('splitDuQty').value = du;
+  document.getElementById('splitUsQty').value = total - du;
+}
+function confirmSplitStock(){
+  const i = splitModalIndex;
+  if(i === null) return;
+  cart[i].us_qty = parseFloat(document.getElementById('splitUsQty').value) || 0;
+  cart[i].du_qty = parseFloat(document.getElementById('splitDuQty').value) || 0;
+  closeSplitModal();
+  renderCart();
+}
+
+function renderCart(){
+  const tbody = document.getElementById('cartBody');
+  const table = document.getElementById('cartTable');
+  const empty = document.getElementById('emptyCart');
+  if(cart.length === 0){ table.style.display = 'none'; empty.style.display = 'block'; return; }
+  table.style.display = 'table'; empty.style.display = 'none';
+  tbody.innerHTML = cart.map((item, i) => {
+    let badgeLabel, badgeColor;
+    if(item.du_qty === 0){ badgeLabel = 'US'; badgeColor = 'paid'; }
+    else if(item.us_qty === 0){ badgeLabel = 'DU'; badgeColor = 'overdue'; }
+    else { badgeLabel = `US ${item.us_qty} \u00b7 DU ${item.du_qty}`; badgeColor = 'ink'; }
+    return `<tr>
+    <td>${escapeHtml(item.description)}</td>
+    <td class="num"><input class="qty-input" type="number" min="1" step="1" value="${cartTotal(item)}" onchange="updateQty(${i}, this.value)"></td>
+    <td>
+      <button type="button" onclick="openSplitModal(${i})"
+        style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:5px 10px;border-radius:2px;cursor:pointer;white-space:nowrap;
+        border:1px solid var(--${badgeColor});
+        background:${badgeColor === 'paid' ? 'var(--paid-soft)' : badgeColor === 'overdue' ? 'var(--overdue-soft)' : 'var(--paper)'};
+        color:${badgeColor === 'paid' ? 'var(--paid)' : badgeColor === 'overdue' ? 'var(--overdue)' : 'var(--ink)'};">
+        ${badgeLabel}
+      </button>
+    </td>
+    <td><button class="remove-btn" onclick="removeFromCart(${i})">✕</button></td>
+  </tr>`;
+  }).join('');
+}
+
+function showError(msg){ const el = document.getElementById('errorBanner'); el.textContent = msg; el.style.display = 'block'; }
+
+function buildSubmitLines(){
+  // Each cart entry is one product with a US/DU split; the backend needs
+  // that expressed as one line per stock-type actually in use (1 or 2
+  // lines per entry), not as visual duplication - the UI shows one row,
+  // the split only happens here at submit time.
+  const lines = [];
+  cart.forEach(item => {
+    if(item.us_qty > 0){ lines.push({id: item.id, qty: item.us_qty, update_stock: true}); }
+    if(item.du_qty > 0){ lines.push({id: item.id, qty: item.du_qty, update_stock: false}); }
+  });
+  return lines;
+}
+
+function submitDelivery(){
+  const customerId = document.getElementById('customerId').value;
+  const dateVal = document.getElementById('deliveryDate').value;
+  document.getElementById('errorBanner').style.display = 'none';
+  if(!customerId){ showError('Please select a customer.'); return; }
+  if(cart.length === 0){ showError('Please add at least one item.'); return; }
+
+  const parts = dateVal.split('-');
+  const dateFormatted = parts[2] + '/' + parts[1] + '/' + parts[0];
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+
+  fetch('/deliveries/new', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      customer_id: customerId, date: dateFormatted,
+      lines: buildSubmitLines(),
+    })
+  }).then(r => r.json()).then(res => {
+    btn.disabled = false; btn.textContent = 'Create Delivery Receipt';
+    if(!res.ok){ showError(res.error || 'Failed to create delivery receipt.'); return; }
+    document.getElementById('formCard').style.display = 'none';
+    document.getElementById('itemsCard').style.display = 'none';
+    document.getElementById('successBanner').style.display = 'block';
+    document.getElementById('successMsg').textContent = 'Delivery receipt ' + res.receipt_no + ' created — pending admin approval.';
+    document.getElementById('viewPdfLinkCustomer').href = res.pdf_url_customer;
+    document.getElementById('viewPdfLinkOffice').href = res.pdf_url_office;
+  }).catch(() => { btn.disabled = false; btn.textContent = 'Create Delivery Receipt'; showError('Network error.'); });
+}
+</script>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

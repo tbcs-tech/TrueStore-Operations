@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customers &amp; Vendors · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .type-tabs{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden;width:fit-content;margin-bottom:16px;}
+  .type-tabs a{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 16px;text-decoration:none;color:var(--ink);background:var(--paper-raised);}
+  .type-tabs a.active{background:var(--ink);color:var(--paper);}
+  .filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;align-items:center;}
+  input, select{font-size:13px;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn.small{padding:5px 10px;font-size:11px;}
+  .btn.outline{background:transparent;color:var(--ink);}
+  table{width:100%;border-collapse:collapse;background:var(--paper-raised);border:1px solid var(--rule-strong);}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--ink-soft);background:var(--paper);}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--rule-strong);color:var(--ink-soft);white-space:nowrap;}
+  .flash{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:16px;}
+  .result-count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-bottom:10px;}
+  .spacer{flex:1;}
+</style>
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav"><a href="/home">&larr; TrueStore Operations</a>{% if logged_in_user %}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">{{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) &middot; <a href="/logout" style="color:var(--ink-soft);">Log out</a></span>{% endif %}</div>
+  <h1>Customers &amp; Vendors</h1>
+  <div class="subtitle">Master data used by New Bill, New Purchase, and Wallet</div>
+
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="type-tabs">
+    <a class="{{ 'active' if party_type=='customer' }}" href="/parties?type=customer">Customers</a>
+    <a class="{{ 'active' if party_type=='vendor' }}" href="/parties?type=vendor">Vendors</a>
+  </div>
+
+  <form class="filter-bar" method="get">
+    <input type="hidden" name="type" value="{{ party_type }}">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search name or ID...">
+    <select name="category">
+      <option value="all" {{ 'selected' if category=='all' }}>All {{ 'banks/groups' if party_type=='customer' else 'categories' }}</option>
+      {% for c in categories %}<option value="{{ c }}" {{ 'selected' if category==c }}>{{ c }}</option>{% endfor %}
+    </select>
+    <button class="btn" type="submit">Filter</button>
+    <span class="spacer"></span>
+    <a class="btn" href="/parties/{{ 'customers' if party_type=='customer' else 'vendors' }}/new">+ Add {{ 'Customer' if party_type=='customer' else 'Vendor' }}</a>
+  </form>
+
+  <div class="result-count">{{ items|length }} result(s)</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>{{ 'Customer ID' if party_type=='customer' else 'Vendor ID' }}</th>
+        <th>Name</th><th>{{ 'Bank/Group' if party_type=='customer' else 'Category' }}</th>
+        <th>Contact</th><th>GSTN</th>
+        {% for f in custom_fields %}<th>{{ f.field_label }}</th>{% endfor %}
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="partiesTbody">
+      {% for item in items %}
+      <tr>
+        <td>{{ item.customer_id if party_type=='customer' else item.vendor_id }}</td>
+        <td>{{ item.name }}</td>
+        <td>{% if item.category %}<span class="pill">{{ item.category }}</span>{% endif %}</td>
+        <td>{{ item.contact_number }}</td>
+        <td>{{ item.gstn or '—' }}</td>
+        {% set item_id = item.customer_id if party_type=='customer' else item.vendor_id %}
+        {% for f in custom_fields %}<td>{{ custom_values.get(item_id, {}).get(f.field_key, '') }}</td>{% endfor %}
+        <td>
+          <a class="btn small outline" href="/parties/{{ 'customers' if party_type=='customer' else 'vendors' }}/edit/{{ item_id }}">Edit</a>
+          <a class="btn small outline" href="/parties/{{ 'customers' if party_type=='customer' else 'vendors' }}/{{ item_id }}/ledger">Ledger</a>
+          {% if party_type == 'vendor' %}<a class="btn small outline" href="/parties/vendors/{{ item_id }}/products">Products</a>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+<script>InfiniteScroll.attach("#partiesTbody", {chunkSize: 40});</script>
+</body>
+</html>

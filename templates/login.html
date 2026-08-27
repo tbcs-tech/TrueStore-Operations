@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · TrueStore Operations</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px;}
+  .box{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:4px;padding:32px;width:100%;max-width:360px;}
+  h1{font-family:'Fraunces',serif;font-size:22px;margin:0 0 4px;}
+  .sub{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);margin-bottom:22px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:14px 0 5px;}
+  input{width:100%;font-size:14px;padding:10px 11px;border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .btn{width:100%;margin-top:20px;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:11px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .btn:hover{filter:brightness(1.15);}
+  .flash{background:var(--overdue-soft);color:var(--overdue);border:1px solid var(--overdue);padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:14px;}
+</style>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="box">
+  <h1>TrueStore Operations</h1>
+  <div class="sub">Log in to continue</div>
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  <form method="post">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" required autocomplete="username" autofocus>
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required autocomplete="current-password">
+    <button class="btn" type="submit">Log in</button>
+  </form>
+</div>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

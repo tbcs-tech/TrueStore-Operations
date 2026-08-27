@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Bill · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/card_picker.css?v=3">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+  :root{
+    --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f;
+    --rule:#e2dccb; --rule-strong:#c9c2ab; --accent:#d8c9a3; --overdue:#a3452e; --overdue-soft:#f3e3dd;
+    --paid:#3f6b4f; --paid-soft:#e2ede4;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+  .top-nav a{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  .top-nav a:hover{background:var(--paper-raised);}
+  h1{font-family:'Fraunces',serif;font-size:28px;font-weight:600;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:24px;}
+  .card{background:var(--paper-raised);border:1px solid var(--rule-strong);border-radius:3px;padding:20px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin:0 0 14px;}
+  .field-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .field{flex:1;min-width:200px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-bottom:5px;}
+  input[type=text], input[type=date], input[type=number], select{
+    width:100%;font-family:'Inter',sans-serif;font-size:13px;padding:8px 10px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);
+  }
+  .autocomplete{position:relative;}
+  .ac-results{
+    position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--rule-strong);
+    max-height:240px;overflow-y:auto;z-index:50;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1);
+  }
+  .ac-results.open{display:block;}
+  .ac-item{padding:8px 10px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--rule);}
+  .ac-item:hover{background:var(--paper);}
+  .ac-item .ac-meta{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
+  table{width:100%;border-collapse:collapse;margin-top:6px;}
+  th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);}
+  td.num, th.num{text-align:right;}
+  .qty-input{width:70px;padding:5px 6px;font-size:12.5px;}
+  .remove-btn{background:none;border:none;color:var(--overdue);cursor:pointer;font-size:14px;}
+  .totals-box{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule-strong);text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13px;}
+  .totals-box .grand{font-size:17px;font-weight:600;font-family:'Fraunces',serif;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 18px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;}
+  .btn:hover{filter:brightness(1.15);}
+  .btn.secondary{background:transparent;color:var(--ink);}
+  .btn:disabled{opacity:0.5;cursor:not-allowed;}
+  .empty-cart{color:var(--ink-soft);font-size:12.5px;padding:16px 0;text-align:center;}
+  .banner{padding:12px 16px;border-radius:2px;font-size:13px;margin-bottom:16px;}
+  .banner.warn{background:var(--overdue-soft);color:var(--overdue);border:1px solid var(--overdue);}
+  .banner.success{background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);}
+  .result-actions{display:flex;gap:10px;margin-top:12px;}
+  .upload-form{display:flex;gap:10px;align-items:center;}
+</style>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/home">&larr; TrueStore Operations</a>
+    <a href="/bills/list">Saved Bills</a>
+    {% if logged_in_user %}
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">
+      {{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) · <a href="/logout" style="border:none;padding:0;">log out</a>
+    </span>
+    {% endif %}
+  </div>
+  <h1>New Bill</h1>
+  <div class="subtitle">Pulls live stock &amp; pricing from your uploaded billdesk.xlsx</div>
+
+  {% if not billdesk_exists %}
+  <div class="card">
+    <h2>Upload stock catalog</h2>
+    <p style="font-size:13px;color:var(--ink-soft);">No billdesk.xlsx loaded yet. Upload it to start creating bills.</p>
+    <form class="upload-form" method="post" action="/bills/upload-catalog" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".xlsx,.xlsm" required>
+      <button class="btn" type="submit">Upload</button>
+    </form>
+  </div>
+  {% else %}
+
+  <div class="card" id="successBanner" style="display:none;">
+    <div class="banner success" id="successMsg"></div>
+    <div class="result-actions">
+      <a id="viewPdfLink" class="btn" href="#" target="_blank">View PDF</a>
+      <button class="btn secondary" type="button" onclick="resetForm()">Create another bill</button>
+    </div>
+  </div>
+
+  <div class="card" id="formCard">
+    <h2>Bill details</h2>
+    <div class="field-row">
+      <div class="field">
+        <label for="billType">Bill Type</label>
+        <select id="billType">
+          <option value="Tax Invoice">Tax Invoice</option>
+          <option value="Estimate">Estimate</option>
+          <option value="DirectSell">Direct Sell</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="billDate">Date</label>
+        <input type="date" id="billDate">
+      </div>
+      <div class="field">
+        <label for="manualInvoiceNo">Invoice #</label>
+        <input type="text" id="manualInvoiceNo" placeholder="e.g. TS2026AA0200" oninput="checkInvoiceAvailability()">
+        <div id="invoiceAvailability" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;margin-top:4px;"></div>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field autocomplete">
+        <label for="customerSearch">Customer</label>
+        <div class="cp-input-with-browse">
+          <div style="position:relative;">
+            <input type="text" id="customerSearch" placeholder="Search by name or customer ID..." autocomplete="off">
+            <div class="ac-results" id="customerResults"></div>
+          </div>
+          <select id="customerCategoryFilter" style="max-width:170px;" onchange="renderCustomerSearchResults()">
+            <option value="">All banks/groups</option>
+          </select>
+          <button class="cp-browse-btn" type="button" onclick="browseCustomers()">⊞ Browse</button>
+        </div>
+        <input type="hidden" id="customerId">
+      </div>
+    </div>
+    <div id="selectedCustomer" style="font-size:12.5px;color:var(--ink-soft);margin-top:-4px;"></div>
+  </div>
+
+  <div class="card" id="itemsCard">
+    <h2>Items</h2>
+    <div class="field autocomplete">
+      <label for="itemSearch">Add item</label>
+      <div class="cp-input-with-browse">
+        <div style="position:relative;">
+          <input type="text" id="itemSearch" placeholder="Search product name..." autocomplete="off">
+          <div class="ac-results" id="itemResults"></div>
+        </div>
+        <button class="cp-browse-btn" type="button" onclick="browseProducts()">⊞ Browse</button>
+      </div>
+    </div>
+
+    <table id="cartTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Description</th><th>HSN</th><th class="num">GST%</th>
+          <th class="num">Rate</th><th class="num">Qty</th><th class="num">Amount</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="cartBody"></tbody>
+    </table>
+    <div class="empty-cart" id="emptyCart">No items added yet.</div>
+
+    <div class="totals-box" id="totalsBox" style="display:none;">
+      <div>Taxable Amount: <span id="totTaxable">₹0.00</span></div>
+      <div>CGST: <span id="totCgst">₹0.00</span></div>
+      <div>SGST: <span id="totSgst">₹0.00</span></div>
+      <div class="grand">Grand Total: <span id="totGrand">₹0.00</span></div>
+    </div>
+  </div>
+
+  <div id="errorBanner" class="banner warn" style="display:none;"></div>
+
+  <button class="btn" id="submitBtn" onclick="submitBill()">Create Bill</button>
+
+  {% endif %}
+</div>
+
+<script src="/static/card_picker.js?v=4"></script>
+<script>
+let customers = [];
+let products = [];
+let cart = [];  // {sheet, row, description, hsn, mrp, gst_pct, sale_price, cost_price, qty}
+let customerCategoryOptions = [];
+
+document.addEventListener('DOMContentLoaded', function(){
+  const dateInput = document.getElementById('billDate');
+  if(dateInput){ dateInput.value = new Date().toISOString().slice(0,10); }
+  loadCustomers();
+  loadProducts();
+  prefillInvoiceNumber();
+});
+
+let suggestedInvoiceNo = '';
+function prefillInvoiceNumber(){
+  fetch('/bills/api/next-invoice-number').then(r => r.json()).then(res => {
+    if(res.ok){
+      suggestedInvoiceNo = res.suggested;
+      document.getElementById('manualInvoiceNo').value = suggestedInvoiceNo;
+      checkInvoiceAvailability();
+    }
+  }).catch(() => {});
+}
+
+let invoiceCheckTimer = null;
+function checkInvoiceAvailability(){
+  const el = document.getElementById('invoiceAvailability');
+  const value = document.getElementById('manualInvoiceNo').value.trim();
+  if(!value){ el.textContent = ''; return; }
+  clearTimeout(invoiceCheckTimer);
+  el.textContent = 'Checking…';
+  el.style.color = 'var(--ink-soft)';
+  invoiceCheckTimer = setTimeout(function(){
+    fetch('/bills/api/invoice-availability/' + encodeURIComponent(value)).then(r => r.json()).then(res => {
+      if(!res.ok) return;
+      if(res.available){
+        el.textContent = '✓ Available' + (value === suggestedInvoiceNo ? ' (suggested next number)' : '');
+        el.style.color = 'var(--paid)';
+      } else {
+        el.textContent = '✗ Already used — pick a different number';
+        el.style.color = 'var(--overdue)';
+      }
+    }).catch(() => { el.textContent = ''; });
+  }, 350);
+}
+
+function loadCustomers(){
+  fetch('/bills/api/customers').then(r => r.json()).then(res => {
+    if(res.ok){ customers = res.customers; }
+  });
+  fetch('/parties/customers/api/categories').then(r => r.json()).then(res => {
+    if(res.ok){
+      customerCategoryOptions = res.categories;
+      const catSelect = document.getElementById('customerCategoryFilter');
+      catSelect.innerHTML = '<option value="">All banks/groups</option>' +
+        res.categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    }
+  });
+}
+
+function loadProducts(){
+  fetch('/bills/api/products').then(r => r.json()).then(res => {
+    if(res.ok){ products = res.products; }
+  });
+}
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+// ---------- Customer autocomplete ----------
+const customerSearch = document.getElementById('customerSearch');
+const customerResults = document.getElementById('customerResults');
+if(customerSearch){
+  customerSearch.addEventListener('input', renderCustomerSearchResults);
+  function renderCustomerSearchResults(){
+    const q = customerSearch.value.trim().toLowerCase();
+    const cat = document.getElementById('customerCategoryFilter').value;
+    if(q.length < 2 && !cat){ customerResults.classList.remove('open'); return; }
+    const matches = customers.filter(c =>
+      (!q || (c.name || '').toLowerCase().includes(q) || (c.customer_id || '').toLowerCase().includes(q)) &&
+      (!cat || (c.category || '').toLowerCase() === cat.toLowerCase())
+    ).slice(0, 20);
+    customerResults.innerHTML = matches.map(c =>
+      `<div class="ac-item" onclick='selectCustomer(${JSON.stringify(c.customer_id)})'>
+        <div>${escapeHtml(c.name)}</div>
+        <div class="ac-meta">${escapeHtml(c.customer_id)} · ${escapeHtml(c.address_details || '')}${c.category ? ' · ' + escapeHtml(c.category) : ''}</div>
+      </div>`
+    ).join('');
+    customerResults.classList.toggle('open', matches.length > 0);
+  }
+  window.renderCustomerSearchResults = renderCustomerSearchResults;
+  document.addEventListener('click', function(e){
+    if(!customerSearch.contains(e.target) && !customerResults.contains(e.target)){
+      customerResults.classList.remove('open');
+    }
+  });
+}
+
+let customerPriceMemory = {};
+
+function selectCustomer(customerId){
+  const c = customers.find(x => x.customer_id === customerId);
+  if(!c) return;
+  document.getElementById('customerId').value = c.customer_id;
+  customerSearch.value = c.name;
+  document.getElementById('selectedCustomer').textContent = c.customer_id + ' · ' + (c.address_details || '') + (c.gstn ? ' · GSTN: ' + c.gstn : '');
+  customerResults.classList.remove('open');
+
+  customerPriceMemory = {};
+  fetch('/bills/api/customer-prices/' + encodeURIComponent(customerId)).then(r => r.json()).then(res => {
+    if(res.ok){
+      customerPriceMemory = res.prices;
+      // Any items already in the cart before the customer was picked (or
+      // picked/changed after adding items) should pick up their
+      // recommended price now too, rather than staying at the catalog rate.
+      cart.forEach(item => {
+        if(customerPriceMemory[item.id] !== undefined && !item._rate_edited){
+          item.sale_price = customerPriceMemory[item.id];
+          item._recommended = true;
+        }
+      });
+      renderCart();
+    }
+  }).catch(() => {});
+}
+
+// ---------- Item autocomplete ----------
+const itemSearch = document.getElementById('itemSearch');
+const itemResults = document.getElementById('itemResults');
+if(itemSearch){
+  itemSearch.addEventListener('input', function(){
+    const q = this.value.trim().toLowerCase();
+    if(q.length < 2){ itemResults.classList.remove('open'); return; }
+    const matches = products.filter(p =>
+      (p.item_name || '').toLowerCase().includes(q) || (p.sheet || '').toLowerCase().includes(q)
+    ).slice(0, 25);
+    itemResults.innerHTML = matches.map((p, i) =>
+      `<div class="ac-item" onclick='addToCart(${p.id})'>
+        <div>${escapeHtml(p.sheet)} ${escapeHtml(p.item_name)} ${escapeHtml(p.item_description || '')}</div>
+        <div class="ac-meta">Stock: ${p.quantity != null ? p.quantity : '—'} · GST ${p.gst_pct || 0}% · Rs ${customerPriceMemory[p.id] !== undefined ? customerPriceMemory[p.id] + ' (last charged to this customer)' : p.sale_price || 0 + '/unit'}${p.approved === false ? ' · <span style="color:var(--overdue);">pending admin approval</span>' : ''}</div>
+      </div>`
+    ).join('');
+    itemResults.classList.toggle('open', matches.length > 0);
+  });
+  document.addEventListener('click', function(e){
+    if(!itemSearch.contains(e.target) && !itemResults.contains(e.target)){
+      itemResults.classList.remove('open');
+    }
+  });
+}
+
+function addToCart(id){
+  const p = products.find(x => x.id === id);
+  if(!p) return;
+  const existing = cart.find(c => c.id === id);
+  if(existing){
+    existing.qty += 1;
+  } else {
+    const catalogPrice = parseFloat(p.sale_price || 0);
+    const recommendedPrice = customerPriceMemory[id];
+    const hasRecommendation = recommendedPrice !== undefined;
+    cart.push({
+      id: p.id, sheet: p.sheet,
+      description: (p.sheet + ' ' + (p.item_name||'') + ' ' + (p.item_description||'')).replace(/ +/g,' ').trim(),
+      hsn: (p.hsn || '').slice(0,4), mrp: p.mrp,
+      gst_pct: parseFloat(p.gst_pct || 0),
+      sale_price: hasRecommendation ? recommendedPrice : catalogPrice,
+      catalog_price: catalogPrice,
+      _recommended: hasRecommendation,
+      _rate_edited: false,
+      qty: 1,
+    });
+  }
+  itemSearch.value = '';
+  itemResults.classList.remove('open');
+  renderCart();
+}
+
+function removeFromCart(index){
+  cart.splice(index, 1);
+  renderCart();
+}
+
+function updateQty(index, value){
+  const qty = parseFloat(value);
+  cart[index].qty = isNaN(qty) || qty <= 0 ? 1 : qty;
+  renderCart();
+}
+
+function updateRate(index, value){
+  const rate = parseFloat(value);
+  if(isNaN(rate) || rate <= 0){ renderCart(); return; }
+  cart[index].sale_price = rate;
+  cart[index]._rate_edited = true;
+  renderCart();
+}
+
+function rateWithoutGst(price, gst){
+  return Math.round((price * 100.0 / (100.0 + gst)) * 100) / 100;
+}
+
+function renderCart(){
+  const tbody = document.getElementById('cartBody');
+  const table = document.getElementById('cartTable');
+  const empty = document.getElementById('emptyCart');
+  const totalsBox = document.getElementById('totalsBox');
+
+  if(cart.length === 0){
+    table.style.display = 'none';
+    empty.style.display = 'block';
+    totalsBox.style.display = 'none';
+    return;
+  }
+  table.style.display = 'table';
+  empty.style.display = 'none';
+  totalsBox.style.display = 'block';
+
+  const billType = document.getElementById('billType').value;
+  let rows = '';
+  const buckets = {};
+  cart.forEach((item, i) => {
+    const taxableRate = rateWithoutGst(item.sale_price, item.gst_pct);
+    const amount = billType === 'Tax Invoice'
+      ? Math.round(taxableRate * item.qty * 100) / 100
+      : Math.round(item.sale_price * item.qty * 100) / 100;
+    item._amount = amount;
+    const gst = Math.round(item.gst_pct);
+    buckets[gst] = (buckets[gst] || 0) + amount;
+
+    rows += `<tr>
+      <td>${escapeHtml(item.description)}</td>
+      <td>${escapeHtml(item.hsn)}</td>
+      <td class="num">${item.gst_pct}</td>
+      <td class="num">
+        <input class="qty-input" type="number" min="1" step="1" value="${item.sale_price}" onchange="updateRate(${i}, this.value)">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:${item._recommended ? 'var(--paid)' : 'var(--ink-soft)'};margin-top:2px;white-space:nowrap;">
+          ${item._rate_edited ? 'edited' : item._recommended ? 'recommended (last charged)' : 'standard price'}
+        </div>
+      </td>
+      <td class="num"><input class="qty-input" type="number" min="1" step="1" value="${item.qty}" onchange="updateQty(${i}, this.value)"></td>
+      <td class="num">₹${amount.toFixed(2)}</td>
+      <td><button class="remove-btn" onclick="removeFromCart(${i})">✕</button></td>
+    </tr>`;
+  });
+  tbody.innerHTML = rows;
+
+  let ttaxamt = 0, cgst = 0, sgst = 0;
+  Object.keys(buckets).forEach(gst => {
+    const g = parseFloat(gst);
+    const taxable = Math.round(buckets[gst] * 100) / 100;
+    if(g > 0){
+      const half = Math.round(taxable * g / 100 / 2 * 100) / 100;
+      cgst += half;
+      sgst += half;
+    }
+    ttaxamt += taxable;
+  });
+  ttaxamt = Math.round(ttaxamt * 100) / 100;
+  cgst = Math.round(cgst * 100) / 100;
+  sgst = Math.round(sgst * 100) / 100;
+  const grand = billType === 'Tax Invoice' ? Math.round((ttaxamt + cgst + sgst) * 100) / 100 : ttaxamt;
+
+  document.getElementById('totTaxable').textContent = '₹' + ttaxamt.toFixed(2);
+  document.getElementById('totCgst').textContent = '₹' + cgst.toFixed(2);
+  document.getElementById('totSgst').textContent = '₹' + sgst.toFixed(2);
+  document.getElementById('totGrand').textContent = '₹' + grand.toFixed(2);
+}
+
+const billTypeSelect = document.getElementById('billType');
+if(billTypeSelect){ billTypeSelect.addEventListener('change', renderCart); }
+
+function showError(msg){
+  const el = document.getElementById('errorBanner');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function submitBill(){
+  const customerId = document.getElementById('customerId').value;
+  const billType = document.getElementById('billType').value;
+  const dateVal = document.getElementById('billDate').value; // yyyy-mm-dd
+  document.getElementById('errorBanner').style.display = 'none';
+
+  if(!customerId){ showError('Please select a customer.'); return; }
+  if(cart.length === 0){ showError('Please add at least one item.'); return; }
+
+  const [yyyy, mm, dd] = dateVal.split('-');
+  const dateFormatted = `${dd}/${mm}/${yyyy}`;
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+
+  fetch('/bills/api/new', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      customer_id: customerId,
+      bill_type: billType,
+      date: dateFormatted,
+      invoice_no: document.getElementById('manualInvoiceNo').value.trim(),
+      lines: cart.map(c => ({id: c.id, qty: c.qty, rate: c.sale_price})),
+    })
+  }).then(r => r.json()).then(res => {
+    btn.disabled = false;
+    btn.textContent = 'Create Bill';
+    if(!res.ok){
+      showError(res.error || 'Failed to create bill.');
+      return;
+    }
+    document.getElementById('formCard').style.display = 'none';
+    document.getElementById('itemsCard').style.display = 'none';
+    const banner = document.getElementById('successBanner');
+    banner.style.display = 'block';
+    document.getElementById('successMsg').textContent =
+      `Bill ${res.invoice_no} created — Total ₹${res.total.toFixed(2)}, Margin ₹${res.margin.toFixed(2)}` +
+      (res.stock_warnings && res.stock_warnings.length ? ' (stock warnings: ' + res.stock_warnings.join('; ') + ')' : '');
+    document.getElementById('viewPdfLink').href = res.pdf_url;
+  }).catch(() => {
+    btn.disabled = false;
+    btn.textContent = 'Create Bill';
+    showError('Network error - please try again.');
+  });
+}
+
+function resetForm(){
+  window.location.reload();
+}
+
+function browseCustomers(){
+  CardPicker.open({
+    title: 'Browse Customers',
+    items: customers,
+    searchPlaceholder: 'Search name or customer ID...',
+    categories: customerCategoryOptions,
+    categoryLabel: 'All banks/groups',
+    getCategory: function(c){ return c.category; },
+    getSearchText: function(c){ return (c.name || '') + ' ' + (c.customer_id || ''); },
+    renderCard: function(c){
+      return {
+        title: c.name,
+        subtitle: c.customer_id + (c.category ? ' \u00b7 ' + c.category.toUpperCase() : ''),
+        lines: [
+          {label: 'Address', value: c.address_details || '\u2014'},
+          {label: 'GSTN', value: c.gstn || 'Unregistered'},
+        ].concat(customFieldLines(c.custom_fields)),
+      };
+    },
+    onSelect: function(c){ selectCustomer(c.customer_id); },
+  });
+}
+
+function browseProducts(){
+  CardPicker.open({
+    title: 'Browse Products',
+    items: products,
+    searchPlaceholder: 'Search product name or sheet...',
+    categories: Array.from(new Set(products.map(p => p.sheet).filter(Boolean))).sort(),
+    categoryLabel: 'All categories',
+    multiSelect: true,
+    getCategory: function(p){ return p.sheet; },
+    getSearchText: function(p){ return (p.sheet || '') + ' ' + (p.item_name || '') + ' ' + (p.item_description || ''); },
+    renderCard: function(p){
+      return {
+        title: (p.sheet + ' ' + (p.item_name||'') + ' ' + (p.item_description||'')).replace(/ +/g,' ').trim(),
+        subtitle: 'GST ' + (p.gst_pct || 0) + '%',
+        lines: [
+          {label: 'Stock', value: p.quantity != null ? String(p.quantity) : '\u2014', warn: p.quantity != null && p.quantity < 0},
+          {label: 'Rate', value: '\u20b9' + (p.sale_price || 0)},
+        ].concat(customFieldLines(p.custom_fields)).concat(p.approved === false ? [{label: 'Status', value: 'Pending admin approval', warn: true}] : []),
+      };
+    },
+    onSelect: function(p){ addToCart(p.id); },
+  });
+}
+</script>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

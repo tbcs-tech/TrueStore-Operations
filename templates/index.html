@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrueStore Operations — Receivables</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #F6F4EF;
+    --paper-raised: #FCFBF8;
+    --ink: #1C2321;
+    --ink-soft: #5B6360;
+    --rule: #D8D3C7;
+    --rule-strong: #B7AF9E;
+    --overdue: #A23C33;
+    --overdue-soft: #F1DEDA;
+    --margin-green: #3E6B58;
+    --margin-soft: #DCE7E0;
+    --accent: #C08A2E;
+    --split-tag: #6B5B95;
+    --split-tag-soft: #E6E1F0;
+    --paid: #3E6B58;
+    --paid-soft: #DCE7E0;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+
+  .wrap{
+    max-width:1240px;
+    margin:0 auto;
+    padding:48px 28px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  header.top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:24px;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:22px;
+    margin-bottom:8px;
+    flex-wrap:wrap;
+  }
+  .brand-mark{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+  }
+  .brand-mark .ledger-no{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    letter-spacing:.08em;
+    border:1px solid var(--rule-strong);
+    padding:3px 8px;
+    border-radius:2px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-optical-sizing:auto;
+    font-weight:600;
+    font-size:38px;
+    line-height:1;
+    margin:0;
+    letter-spacing:-0.01em;
+  }
+  .subtitle{
+    font-size:13.5px;
+    color:var(--ink-soft);
+    margin-top:8px;
+    font-family:'IBM Plex Mono', monospace;
+  }
+
+  .top-actions{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  form.upload-form{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .file-btn, .btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    background:var(--paper-raised);
+    border:1px solid var(--ink);
+    color:var(--ink);
+    padding:9px 14px;
+    border-radius:2px;
+    cursor:pointer;
+    text-decoration:none;
+    display:inline-block;
+  }
+  .file-btn:hover, .btn:hover{ background:#EFEBE1; }
+  .btn.dark{ background:var(--ink); color:var(--paper); }
+  .btn.dark:hover{ background:#333; }
+  input[type="file"]{
+    font-family:'Inter', sans-serif;
+    font-size:12.5px;
+    max-width:150px;
+  }
+  .filename-tag{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    color:var(--ink-soft);
+  }
+
+  .flash{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    background:var(--margin-soft);
+    color:var(--margin-green);
+    border:1px solid var(--margin-green);
+    padding:8px 14px;
+    border-radius:2px;
+    margin:18px 0;
+    display:inline-block;
+  }
+  .error-box{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    background:var(--overdue-soft);
+    color:var(--overdue);
+    border:1px solid var(--overdue);
+    padding:14px 18px;
+    border-radius:2px;
+    margin-top:24px;
+  }
+
+  /* ---------- Summary strip ---------- */
+  .summary{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:1px;
+    background:var(--rule-strong);
+    border:1px solid var(--rule-strong);
+    margin:28px 0 24px;
+  }
+  .stat{
+    background:var(--paper-raised);
+    padding:20px 22px;
+  }
+  .stat .label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.09em;
+    color:var(--ink-soft);
+    margin-bottom:10px;
+  }
+  .stat .value{
+    font-family:'Fraunces', serif;
+    font-size:28px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+  }
+  .stat.overdue .value{ color:var(--overdue); }
+  .stat.margin .value{ color:var(--margin-green); }
+
+  /* ---------- Filter bar ---------- */
+  .filter-bar{
+    background:var(--paper-raised);
+    border:1px solid var(--rule-strong);
+    padding:16px 18px;
+    margin-bottom:18px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    align-items:flex-end;
+  }
+  .filter-field{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+  }
+  .filter-field label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+  }
+  .filter-field select, .filter-field input[type=text], .filter-field input[type=date]{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    border:1px solid var(--rule-strong);
+    background:#fff;
+    padding:8px 10px;
+    border-radius:2px;
+    color:var(--ink);
+  }
+  .filter-field.search input{ width:190px; }
+  .filter-bar .btn{ height:36px; align-self:flex-end; }
+  .filter-bar .reset-link{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    text-decoration:underline;
+    align-self:center;
+    margin-left:4px;
+  }
+
+  /* ---------- Toolbar / view tabs ---------- */
+  .toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:14px;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .view-tabs{
+    display:flex;
+    gap:0;
+    border:1px solid var(--ink);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .view-tabs a{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    padding:9px 16px;
+    text-decoration:none;
+    color:var(--ink);
+    background:var(--paper-raised);
+  }
+  .view-tabs a.active{
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .view-tabs a:not(.active):hover{ background:#EFEBE1; }
+  .section-eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.09em;
+    color:var(--ink-soft);
+  }
+
+  /* ---------- Status toggle pill ---------- */
+  .status-pill{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:.05em;
+    padding:4px 10px;
+    border-radius:20px;
+    border:1px solid transparent;
+    cursor:pointer;
+    text-transform:uppercase;
+    white-space:nowrap;
+    display:inline-block;
+  }
+  .status-pill.unpaid{ background:var(--overdue-soft); color:var(--overdue); border-color:var(--overdue); }
+  .status-pill.paid{ background:var(--paid-soft); color:var(--paid); border-color:var(--paid); }
+  .status-pill:hover{ filter:brightness(0.95); }
+  .paid-date{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px;
+    color:var(--ink-soft);
+    display:block;
+    margin-top:4px;
+    white-space:nowrap;
+  }
+
+  /* ---------- Payment date modal ---------- */
+  .modal-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(28,35,33,0.55);
+    z-index:1000;
+    align-items:center;
+    justify-content:center;
+  }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{
+    background:var(--paper-raised);
+    border:1px solid var(--ink);
+    padding:24px 26px;
+    border-radius:2px;
+    width:280px;
+  }
+  .modal-title{
+    font-family:'Fraunces', serif;
+    font-size:18px;
+    font-weight:600;
+    margin-bottom:14px;
+  }
+  .modal-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    display:block;
+    margin-bottom:6px;
+  }
+  .modal-date-input{
+    width:100%;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    padding:8px 10px;
+    border:1px solid var(--rule-strong);
+    border-radius:2px;
+    margin-bottom:18px;
+    background:#fff;
+    color:var(--ink);
+  }
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+  }
+  .pdf-modal-box{
+    width:80vw;
+    max-width:900px;
+    height:85vh;
+    display:flex;
+    flex-direction:column;
+  }
+  .modal-title-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:12px;
+  }
+  .modal-close-btn{
+    background:none;
+    border:none;
+    font-size:18px;
+    line-height:1;
+    cursor:pointer;
+    color:var(--ink);
+    padding:2px 6px;
+  }
+  .modal-close-btn:hover{ color:var(--overdue); }
+  .pdf-modal-body{ flex:1; position:relative; min-height:0; }
+  .pdf-modal-frame{ width:100%; height:100%; border:1px solid var(--rule-strong); }
+  .pdf-modal-missing{
+    padding:60px 20px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+  }
+
+  /* ---------- Invoice number: hover + view icon ---------- */
+  .invoice-num{
+    border-bottom:1px dotted var(--rule-strong);
+    cursor:default;
+  }
+  .view-icon{
+    cursor:pointer;
+    margin-left:6px;
+    font-size:12px;
+    opacity:0.75;
+  }
+  .view-icon:hover{ opacity:1; }
+
+  /* ---------- Line-item hover tooltip ---------- */
+  .line-item-tooltip{
+    position:fixed;
+    z-index:1100;
+    background:var(--paper-raised);
+    border:1px solid var(--ink);
+    box-shadow:0 4px 16px rgba(0,0,0,0.2);
+    padding:10px 12px;
+    border-radius:2px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    max-width:440px;
+    display:none;
+    pointer-events:none;
+  }
+  .line-item-tooltip.open{ display:block; }
+  .line-item-tooltip .tt-title{
+    font-family:'Fraunces', serif;
+    font-size:13.5px;
+    font-weight:600;
+    margin-bottom:2px;
+  }
+  .line-item-tooltip .tt-sub{ color:var(--ink-soft); margin-bottom:6px; }
+  .line-item-tooltip table{ border-collapse:collapse; width:100%; }
+  .line-item-tooltip th, .line-item-tooltip td{
+    padding:3px 6px;
+    text-align:left;
+    border-bottom:1px solid var(--rule);
+    white-space:nowrap;
+  }
+  .line-item-tooltip th{ color:var(--ink-soft); font-weight:600; text-align:left; }
+  .line-item-tooltip td.num, .line-item-tooltip th.num{ text-align:right; }
+  .line-item-tooltip .tt-total{ margin-top:6px; text-align:right; font-weight:600; }
+  .line-item-tooltip .tt-loading{ color:var(--ink-soft); }
+
+  /* ---------- Selection bar download controls ---------- */
+  .selection-bar .spacer{ flex:1; }
+  .selection-bar label.include-summary{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    cursor:pointer;
+  }
+  .selection-bar .btn.download-btn{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:var(--ink);
+  }
+  .selection-bar .btn.download-btn:hover{ filter:brightness(0.95); }
+
+  /* ---------- Ledger table (grouped view) ---------- */
+  table.ledger-table{
+    width:100%;
+    border-collapse:collapse;
+    table-layout:fixed;
+    border-top:2px solid var(--ink);
+  }
+  table.ledger-table col.col-caret{ width:4%; }
+  table.ledger-table col.col-name{ width:42%; }
+  table.ledger-table col.col-amount{ width:18%; }
+  table.ledger-table col.col-margin{ width:18%; }
+  table.ledger-table col.col-count{ width:18%; }
+
+  tr.customer-row-tr{
+    cursor:pointer;
+    background:var(--paper-raised);
+    transition:background .12s ease;
+  }
+  tr.customer-row-tr:hover{ background:#F1EEE5; }
+  tr.customer-row-tr td{
+    padding:15px 8px;
+    border-bottom:1px solid var(--rule);
+    vertical-align:middle;
+  }
+  .caret{
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--ink-soft);
+    transition:transform .15s ease;
+    font-size:13px;
+    display:inline-block;
+  }
+  tr.customer-row-tr.open .caret{ transform:rotate(90deg); }
+  td.name-cell{
+    font-family:'Fraunces', serif;
+    font-size:17px;
+    font-weight:500;
+    word-wrap:break-word;
+  }
+  td.name-cell .count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin-left:8px;
+  }
+  td.name-cell .meta-tag{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px;
+    color:var(--ink-soft);
+    margin-left:8px;
+    border:1px solid var(--rule-strong);
+    padding:1px 6px;
+    border-radius:2px;
+    white-space:nowrap;
+  }
+  td.num{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:14.5px;
+    text-align:right;
+    white-space:nowrap;
+  }
+  td.num.amount{ color:var(--overdue); font-weight:600; }
+  td.num.margin{ color:var(--margin-green); font-weight:600; }
+  td.num.count{ color:var(--ink-soft); }
+
+  tr.invoice-panel-tr{ display:none; }
+  tr.invoice-panel-tr.open{ display:table-row; }
+  tr.invoice-panel-tr td.panel-cell{
+    padding:0;
+    background:#EFEBE1;
+    border-bottom:1px solid var(--rule);
+  }
+  .invoice-table{
+    width:100%;
+    border-collapse:collapse;
+    table-layout:fixed;
+  }
+  .invoice-table col.icol-inv{ width:26%; }
+  .invoice-table col.icol-date{ width:16%; }
+  .invoice-table col.icol-amount{ width:20%; }
+  .invoice-table col.icol-margin{ width:20%; }
+  .invoice-table col.icol-status{ width:18%; }
+  .invoice-table th{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    text-align:left;
+    padding:10px 16px 8px 52px;
+    border-bottom:1px solid var(--rule-strong);
+  }
+  .invoice-table th.num, .invoice-table td.num{ text-align:right; padding-right:20px; white-space:nowrap; }
+  .invoice-table th.status-col, .invoice-table td.status-col{ text-align:center; padding-right:16px; }
+  .invoice-table td{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    padding:9px 16px 9px 52px;
+    border-bottom:1px solid var(--rule);
+    word-wrap:break-word;
+    white-space:nowrap;
+  }
+  .invoice-table td:first-child{ white-space:normal; }
+  .invoice-table tbody tr:last-child td{ border-bottom:none; }
+  .split-tag{
+    display:inline-block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:9.5px;
+    letter-spacing:.04em;
+    background:var(--split-tag-soft);
+    color:var(--split-tag);
+    padding:1.5px 6px;
+    border-radius:2px;
+    margin-left:8px;
+    vertical-align:middle;
+  }
+
+  /* ---------- Invoice-wise flat table ---------- */
+  .selection-bar{
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    padding:12px 18px;
+    display:flex;
+    gap:24px;
+    align-items:center;
+    margin-bottom:0;
+  }
+  .selection-bar b{ color:var(--accent); }
+
+  table.flat-table{
+    width:100%;
+    border-collapse:collapse;
+    border-top:2px solid var(--ink);
+  }
+  table.flat-table th{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    text-align:left;
+    padding:11px 14px;
+    border-bottom:1px solid var(--rule-strong);
+    background:var(--paper-raised);
+    position:sticky;
+    top:0;
+  }
+  table.flat-table th.num, table.flat-table td.num{ text-align:right; }
+  table.flat-table th.center, table.flat-table td.center{ text-align:center; }
+  table.flat-table td{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    padding:9px 14px;
+    border-bottom:1px solid var(--rule);
+    background:var(--paper-raised);
+  }
+  table.flat-table td.cust{
+    font-family:'Inter', sans-serif;
+    font-size:13px;
+  }
+  table.flat-table tr:hover td{ background:#F1EEE5; }
+  table.flat-table td.amount{ color:var(--overdue); font-weight:600; }
+  table.flat-table td.margin{ color:var(--margin-green); font-weight:600; }
+  input[type=checkbox].row-check{ width:15px; height:15px; cursor:pointer; }
+
+  /* ---------- Footer totals ---------- */
+  tr.grand-total-tr td{
+    padding:18px 8px;
+    border-top:2px solid var(--ink);
+    font-family:'IBM Plex Mono', monospace;
+  }
+  tr.grand-total-tr td.name{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.09em;
+    color:var(--ink-soft);
+  }
+  tr.grand-total-tr td.num{
+    font-size:16px;
+    font-weight:600;
+    text-align:right;
+  }
+  tr.grand-total-tr td.num.amount{ color:var(--overdue); }
+  tr.grand-total-tr td.num.margin{ color:var(--margin-green); }
+
+  .flat-total-row td{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    font-weight:600;
+    border-top:2px solid var(--ink);
+    border-bottom:none;
+    background:var(--paper-raised);
+  }
+
+  .empty-state{
+    padding:60px 20px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    border:1px dashed var(--rule-strong);
+    margin-top:20px;
+  }
+
+  @media (max-width:900px){
+    header.top{ flex-direction:column; align-items:flex-start; }
+    .summary{ grid-template-columns:1fr 1fr; }
+    table.ledger-table col.col-margin{ width:0; }
+    td.num.margin, tr.grand-total-tr td.num.margin{ display:none; }
+    .filter-field.search input{ width:100%; }
+    .filter-field{ flex:1 1 140px; }
+    .selection-bar{ flex-wrap:wrap; row-gap:10px; }
+    .selection-bar .spacer{ flex-basis:100%; height:0; }
+  }
+
+  @media (max-width:480px){
+    .summary{ grid-template-columns:1fr; }
+    .stat .value{ font-size:22px; }
+    .brand-mark h1{ font-size:20px; }
+  }
+
+  /* ---------- Print ---------- */
+  @media print{
+    body{ background:#fff; }
+    .top-actions, .filter-bar, .view-tabs, .toolbar form, .no-print{ display:none !important; }
+    tr.invoice-panel-tr{ display:table-row !important; }
+    .caret{ display:none; }
+    a.file-btn, form.upload-form{ display:none !important; }
+    .wrap{ padding:0; max-width:100%; }
+    .status-pill{ border:1px solid #999; cursor:default; }
+    table.ledger-table, table.flat-table{ page-break-inside:auto; }
+    tr.customer-row-tr, tr.invoice-panel-tr, table.flat-table tr{ page-break-inside:avoid; }
+    td.name-cell{ font-size:14px; }
+    td.num, tr.grand-total-tr td.num{ font-size:12.5px; }
+    .invoice-table th, .invoice-table td{ font-size:11px; padding-left:36px; }
+    .invoice-table th:first-child, .invoice-table td:first-child{ padding-left:16px; }
+    .status-pill{ font-size:9px; padding:3px 7px; }
+  }
+</style>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/infinite_scroll.css?v=1">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <div class="brand-mark">
+        <h1>TrueStore Operations</h1>
+        <span class="ledger-no">{{ filters_raw.status|upper if filters_raw else 'UNPAID' }} / ALL CUSTOMERS</span>
+      </div>
+      <div class="subtitle">Split invoices are un-bundled into individual lines, weighted by their payment breakup share.</div>
+    </div>
+
+    <div class="top-actions no-print">
+      {% if logged_in_user and logged_in_user.role in ('admin', 'sales') %}<a class="btn" href="/bills">🧾 New Bill</a>{% endif %}
+      {% if logged_in_user and logged_in_user.role in ('admin', 'sales', 'accountant') %}<a class="btn" href="/bills/list">📋 Saved Bills</a>{% endif %}
+      {% if logged_in_user and logged_in_user.role in ('admin', 'purchase', 'field_staff') %}<a class="btn" href="/purchases">📦 New Purchase</a>{% endif %}
+      {% if logged_in_user and logged_in_user.role in ('admin', 'purchase', 'field_staff', 'accountant') %}<a class="btn" href="/purchases/list">📋 Saved Purchases</a>{% endif %}
+      {% if logged_in_user and logged_in_user.role in ('admin', 'sales', 'purchase') %}<a class="btn" href="/parties">👥 Customers/Vendors</a>{% endif %}
+      {% if logged_in_user and logged_in_user.role in ('admin', 'sales', 'purchase', 'field_staff') %}<a class="btn" href="/products/manage">🏷 Products</a>{% endif %}
+      {% if logged_in_user and logged_in_user.role == 'admin' %}
+      <a class="btn" href="/deliveries">🚚 Deliveries</a>
+      <a class="btn" href="/money-requests">💵 Money Requests</a>
+      <a class="btn" href="/admin/users">👤 Users</a>
+      {% endif %}
+      {% if logged_in_user and logged_in_user.role in ('admin', 'sales', 'accountant') %}<a class="btn" href="/wallet">👛 Wallet</a>{% endif %}
+      {% if logged_in_user and logged_in_user.role in ('admin', 'sales') %}<a class="btn" href="{{ url_for('settings') }}">⚙ Settings</a>{% endif %}
+      <button class="btn dark" onclick="window.print()">🖨 Print / Save PDF</button>
+      {% if logged_in_user and logged_in_user.role == 'admin' %}
+      <form class="upload-form" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".xlsx,.xlsm" required>
+        <button class="file-btn" type="submit">Load sheet</button>
+      </form>
+      {% endif %}
+      {% if logged_in_user %}
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">
+        {{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) · <a href="/logout" style="color:var(--ink-soft);">log out</a>
+      </span>
+      {% endif %}
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for m in messages %}
+        <div class="flash no-print">{{ m }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% if filename %}
+    <div class="filename-tag">Source: {{ filename }}</div>
+  {% endif %}
+
+  {% if error %}
+    <div class="error-box">{{ error }}</div>
+  {% else %}
+
+    <div class="summary">
+      <div class="stat overdue">
+        <div class="label">Total Outstanding</div>
+        <div class="value">₹{{ "{:,.0f}".format(grand_total.total_amount) }}</div>
+      </div>
+      <div class="stat margin">
+        <div class="label">{{ 'Total Margin at Risk' if metric=='margin' else 'Total Taxable Amount' }}</div>
+        <div class="value">₹{{ "{:,.0f}".format(grand_total.total_margin if metric=='margin' else grand_total.total_taxable) }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Invoice Lines</div>
+        <div class="value">{{ grand_total.invoice_count }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Customers</div>
+        <div class="value">{{ grand_total.customer_count }}</div>
+      </div>
+    </div>
+
+    <form class="filter-bar no-print" method="get" action="{{ url_for('dashboard') }}">
+      <input type="hidden" name="view" value="{{ view }}">
+      <input type="hidden" name="metric" value="{{ metric }}">
+
+      <div class="filter-field search">
+        <label>Search customer</label>
+        <input type="text" name="q" placeholder="Party name…" value="{{ filters_raw.q or '' }}">
+      </div>
+
+      <div class="filter-field">
+        <label>Status</label>
+        <select name="status">
+          <option value="unpaid" {% if filters_raw.status=='unpaid' %}selected{% endif %}>Unpaid</option>
+          <option value="paid" {% if filters_raw.status=='paid' %}selected{% endif %}>Paid</option>
+          <option value="all" {% if filters_raw.status=='all' %}selected{% endif %}>All</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label>Period from</label>
+        <input type="date" name="date_from" value="{{ filters_raw.date_from or '' }}">
+      </div>
+      <div class="filter-field">
+        <label>Period to</label>
+        <input type="date" name="date_to" value="{{ filters_raw.date_to or '' }}">
+      </div>
+
+      <div class="filter-field">
+        <label>Coordinator</label>
+        <select name="coordinator">
+          <option value="all" {% if filters_raw.coordinator=='all' %}selected{% endif %}>All</option>
+          {% for c in coordinators %}
+            <option value="{{ c }}" {% if filters_raw.coordinator==c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label>Group by</label>
+        <select name="group_by">
+          <option value="all" {% if filters_raw.group_by=='all' %}selected{% endif %}>All</option>
+          {% for g in group_by_options %}
+            <option value="{{ g }}" {% if filters_raw.group_by==g %}selected{% endif %}>{{ g }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label>Amount range</label>
+        <select name="amount_range">
+          <option value="all" {% if filters_raw.amount_range=='all' %}selected{% endif %}>All</option>
+          {% for key, meta in amount_ranges.items() %}
+            <option value="{{ key }}" {% if filters_raw.amount_range==key %}selected{% endif %}>{{ meta[0] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button class="btn dark" type="submit">Apply filters</button>
+      <a class="reset-link" href="{{ url_for('dashboard', view=view) }}">Reset</a>
+    </form>
+
+    <div class="toolbar">
+      <div class="view-tabs no-print">
+        <a class="{{ 'active' if view=='grouped' else '' }}"
+           href="{{ url_for('dashboard', view='grouped', metric=metric, q=filters_raw.q, status=filters_raw.status, date_from=filters_raw.date_from, date_to=filters_raw.date_to, coordinator=filters_raw.coordinator, group_by=filters_raw.group_by, amount_range=filters_raw.amount_range) }}">Grouped by customer</a>
+        <a class="{{ 'active' if view=='invoice' else '' }}"
+           href="{{ url_for('dashboard', view='invoice', metric=metric, q=filters_raw.q, status=filters_raw.status, date_from=filters_raw.date_from, date_to=filters_raw.date_to, coordinator=filters_raw.coordinator, group_by=filters_raw.group_by, amount_range=filters_raw.amount_range) }}">Invoice-wise</a>
+      </div>
+      <div class="view-tabs no-print">
+        <a class="{{ 'active' if metric=='margin' else '' }}"
+           href="{{ url_for('dashboard', view=view, metric='margin', q=filters_raw.q, status=filters_raw.status, date_from=filters_raw.date_from, date_to=filters_raw.date_to, coordinator=filters_raw.coordinator, group_by=filters_raw.group_by, amount_range=filters_raw.amount_range) }}">Margin</a>
+        <a class="{{ 'active' if metric=='taxable' else '' }}"
+           href="{{ url_for('dashboard', view=view, metric='taxable', q=filters_raw.q, status=filters_raw.status, date_from=filters_raw.date_from, date_to=filters_raw.date_to, coordinator=filters_raw.coordinator, group_by=filters_raw.group_by, amount_range=filters_raw.amount_range) }}">Taxable</a>
+      </div>
+      <span class="section-eyebrow">{{ 'Click a row to expand' if view=='grouped' else 'Check rows to build a manual selection' }}</span>
+    </div>
+
+    {% if view == 'invoice' %}
+      <div class="selection-bar no-print" id="selectionBar">
+        Selected: <b id="selCount">0</b> invoices &nbsp;•&nbsp; Amount: <b id="selAmount">₹0</b> &nbsp;•&nbsp; {{ 'Margin' if metric=='margin' else 'Taxable Amount' }}: <b id="selMargin">₹0</b>
+        &nbsp;•&nbsp; <a href="#" onclick="selectAll(true);return false;" style="color:var(--paper);text-decoration:underline;">select all</a>
+        &nbsp;/&nbsp; <a href="#" onclick="selectAll(false);return false;" style="color:var(--paper);text-decoration:underline;">clear</a>
+        <span class="spacer"></span>
+        <label class="include-summary"><input type="checkbox" id="includeSummaryCheck"> Include summary PDF</label>
+        <button class="btn download-btn" type="button" onclick="downloadSelected()">⬇ Download selected</button>
+      </div>
+    {% endif %}
+
+    {% if view == 'grouped' %}
+      {% if customers %}
+      <table class="ledger-table">
+        <colgroup>
+          <col class="col-caret"><col class="col-name"><col class="col-amount"><col class="col-margin"><col class="col-count">
+        </colgroup>
+        <tbody>
+        {% for c in customers %}
+        <tr class="customer-row-tr" onclick="toggleRow({{ loop.index }})" id="row-{{ loop.index }}">
+          <td><span class="caret">▸</span></td>
+          <td class="name-cell">{{ c.customer }}<span class="count">{{ c.invoice_count }} invoice{{ 's' if c.invoice_count != 1 else '' }}</span>{% if c.coordinator %}<span class="meta-tag">{{ c.coordinator }}</span>{% endif %}{% if c.group_by %}<span class="meta-tag">{{ c.group_by }}</span>{% endif %}</td>
+          <td class="num amount">₹{{ "{:,.0f}".format(c.total_amount) }}</td>
+          <td class="num margin">₹{{ "{:,.0f}".format(c.total_margin if metric=='margin' else c.total_taxable) }}</td>
+          <td class="num count">{{ c.invoice_count }} inv.</td>
+        </tr>
+        <tr class="invoice-panel-tr" id="panel-{{ loop.index }}">
+          <td class="panel-cell" colspan="5">
+            <table class="invoice-table">
+              <colgroup>
+                <col class="icol-inv"><col class="icol-date"><col class="icol-amount"><col class="icol-margin"><col class="icol-status">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th class="num">Amount</th>
+                  <th class="num">{{ 'Margin' if metric=='margin' else 'Taxable Amount' }}</th>
+                  <th class="status-col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for inv in c.invoices %}
+                <tr>
+                  <td>
+                    <span class="invoice-num" onmouseenter="showLineItemTooltip(event, '{{ inv.invoice_id }}')" onmouseleave="hideLineItemTooltip()">{{ inv.invoice_id }}</span>
+                    {% if inv.split %}<span class="split-tag">SPLIT</span>{% endif %}
+                    <span class="view-icon" title="View PDF" onclick="event.stopPropagation(); openPdfModal('{{ inv.invoice_id }}')">👁</span>
+                  </td>
+                  <td>{{ inv.date_str }}</td>
+                  <td class="num">₹{{ "{:,.2f}".format(inv.amount) }}</td>
+                  <td class="num">₹{{ "{:,.2f}".format(inv.margin if metric=='margin' else inv.taxable_amount) }}</td>
+                  <td class="status-col">
+                    <span class="status-pill {{ inv.status }}" onclick="event.stopPropagation(); toggleStatus('{{ inv.invoice_id }}', '{{ inv.status }}', {{ inv.amount }}, '{{ inv.customer_id }}')">{{ inv.status }}</span>
+                    {% if inv.status == 'paid' and inv.payment_date_str %}<span class="paid-date">{{ inv.payment_date_str }}</span>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="grand-total-tr">
+            <td></td>
+            <td class="name">Grand Total — {{ grand_total.customer_count }} customers</td>
+            <td class="num amount">₹{{ "{:,.0f}".format(grand_total.total_amount) }}</td>
+            <td class="num margin">₹{{ "{:,.0f}".format(grand_total.total_margin if metric=='margin' else grand_total.total_taxable) }}</td>
+            <td class="num count">{{ grand_total.invoice_count }} inv.</td>
+          </tr>
+        </tfoot>
+      </table>
+      {% else %}
+        <div class="empty-state">No invoices match these filters.</div>
+      {% endif %}
+
+    {% else %}
+      {% if invoices %}
+      <table class="flat-table" id="flatTable">
+        <thead>
+          <tr>
+            <th class="center"><input type="checkbox" class="row-check" id="checkAll" onclick="selectAll(this.checked)"></th>
+            <th>Invoice #</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th class="num">Amount</th>
+            <th class="num">{{ 'Margin' if metric=='margin' else 'Taxable Amount' }}</th>
+            <th class="center">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in invoices %}
+          <tr>
+            <td class="center"><input type="checkbox" class="row-check" data-invoice-id="{{ inv.invoice_id }}" data-amount="{{ inv.amount }}" data-margin="{{ inv.margin if metric=='margin' else inv.taxable_amount }}" onchange="updateSelection()" checked></td>
+            <td>
+              <span class="invoice-num" onmouseenter="showLineItemTooltip(event, '{{ inv.invoice_id }}')" onmouseleave="hideLineItemTooltip()">{{ inv.invoice_id }}</span>
+              {% if inv.split %}<span class="split-tag">SPLIT</span>{% endif %}
+              <span class="view-icon" title="View PDF" onclick="openPdfModal('{{ inv.invoice_id }}')">👁</span>
+            </td>
+            <td class="cust">{{ inv.customer }}</td>
+            <td>{{ inv.date_str }}</td>
+            <td class="num amount">₹{{ "{:,.2f}".format(inv.amount) }}</td>
+            <td class="num margin">₹{{ "{:,.2f}".format(inv.margin if metric=='margin' else inv.taxable_amount) }}</td>
+            <td class="center">
+              <span class="status-pill {{ inv.status }}" onclick="toggleStatus('{{ inv.invoice_id }}', '{{ inv.status }}', {{ inv.amount }}, '{{ inv.customer_id }}')">{{ inv.status }}</span>
+              {% if inv.status == 'paid' and inv.payment_date_str %}<span class="paid-date">{{ inv.payment_date_str }}</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="flat-total-row">
+            <td></td>
+            <td colspan="3">Grand Total — {{ grand_total.invoice_count }} invoices, {{ grand_total.customer_count }} customers</td>
+            <td class="num">₹{{ "{:,.2f}".format(grand_total.total_amount) }}</td>
+            <td class="num">₹{{ "{:,.2f}".format(grand_total.total_margin if metric=='margin' else grand_total.total_taxable) }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+      {% else %}
+        <div class="empty-state">No invoices match these filters.</div>
+      {% endif %}
+    {% endif %}
+
+  {% endif %}
+</div>
+
+<div class="line-item-tooltip no-print" id="lineItemTooltip"></div>
+
+<div class="modal-overlay no-print" id="pdfModalOverlay">
+  <div class="modal-box pdf-modal-box">
+    <div class="modal-title-row">
+      <div class="modal-title">Invoice PDF</div>
+      <button class="modal-close-btn" type="button" onclick="closePdfModal()">✕</button>
+    </div>
+    <div class="pdf-modal-body">
+      <iframe id="pdfModalFrame" class="pdf-modal-frame" src="" title="Invoice PDF"></iframe>
+      <div id="pdfModalMissing" class="pdf-modal-missing" style="display:none;">PDF not available for this invoice.</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay no-print" id="paymentModalOverlay">
+  <div class="modal-box">
+    <div class="modal-title">Mark as paid</div>
+    <label class="modal-label" for="paymentDateInput">Payment date</label>
+    <input type="date" id="paymentDateInput" class="modal-date-input">
+    <div id="walletPayRow" style="display:none;margin-bottom:14px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="payFromWalletCheck">
+        <span id="walletPayLabel">Pay from wallet balance</span>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" type="button" onclick="closePaymentModal()">Cancel</button>
+      <button class="btn dark" type="button" onclick="confirmPaymentDate()">Mark Paid</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleRow(i){
+    const row = document.getElementById('row-' + i);
+    const panel = document.getElementById('panel-' + i);
+    const isOpen = panel.classList.contains('open');
+    panel.classList.toggle('open', !isOpen);
+    row.classList.toggle('open', !isOpen);
+  }
+
+  function toggleStatus(invoiceId, currentStatus, amount, customerId){
+    if(currentStatus === 'paid'){
+      // Flipping back to unpaid clears the payment date, no prompt needed.
+      submitStatus(invoiceId, 'unpaid', null, false);
+    } else {
+      openPaymentModal(invoiceId, amount, customerId);
+    }
+  }
+
+  let pendingInvoiceId = null;
+  let pendingAmount = null;
+
+  function openPaymentModal(invoiceId, amount, customerId){
+    pendingInvoiceId = invoiceId;
+    pendingAmount = amount;
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('paymentDateInput').value = today;
+
+    const walletRow = document.getElementById('walletPayRow');
+    const walletCheck = document.getElementById('payFromWalletCheck');
+    walletCheck.checked = false;
+    walletRow.style.display = 'none';
+
+    if(customerId){
+      fetch('/wallet/api/balance/' + encodeURIComponent(customerId))
+        .then(function(r){ return r.json(); })
+        .then(function(res){
+          if(res.ok && res.balance >= amount && amount > 0){
+            document.getElementById('walletPayLabel').textContent =
+              'Pay from wallet balance (₹' + res.balance.toFixed(2) + ' available)';
+            walletRow.style.display = 'block';
+          }
+        }).catch(function(){});
+    }
+
+    document.getElementById('paymentModalOverlay').classList.add('open');
+  }
+
+  function closePaymentModal(){
+    document.getElementById('paymentModalOverlay').classList.remove('open');
+    pendingInvoiceId = null;
+    pendingAmount = null;
+  }
+
+  function confirmPaymentDate(){
+    const date = document.getElementById('paymentDateInput').value;
+    if(!date || !pendingInvoiceId){ return; }
+    const payFromWallet = document.getElementById('payFromWalletCheck').checked;
+    submitStatus(pendingInvoiceId, 'paid', date, payFromWallet);
+  }
+
+  function submitStatus(invoiceId, status, paymentDate, payFromWallet){
+    fetch('/invoice/' + encodeURIComponent(invoiceId) + '/status', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status: status, payment_date: paymentDate, pay_from_wallet: !!payFromWallet})
+    }).then(r => r.json()).then(data => {
+      if(data.ok){ window.location.reload(); }
+      else { alert(data.error || 'Failed to update status.'); }
+    }).catch(() => {});
+  }
+
+  document.getElementById('paymentModalOverlay').addEventListener('click', function(e){
+    if(e.target === this){ closePaymentModal(); }
+  });
+
+  // ---------- Line-item hover tooltip ----------
+  const lineItemsCache = {};
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function positionTooltip(event, tooltip){
+    const pad = 16;
+    let x = event.clientX + pad;
+    let y = event.clientY + pad;
+    const maxX = window.innerWidth - 460;
+    const maxY = window.innerHeight - 260;
+    if(x > maxX) x = Math.max(8, event.clientX - 460);
+    if(y > maxY) y = Math.max(8, maxY);
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+
+  function renderTooltip(tooltip, data){
+    let html = '<div class="tt-title">' + escapeHtml(data.invoice_no || '') + '</div>';
+    html += '<div class="tt-sub">' + escapeHtml(data.customer_name || '') + ' &nbsp;•&nbsp; ' + escapeHtml(data.date || '') + '</div>';
+    const items = data.line_items || [];
+    if(items.length){
+      html += '<table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead><tbody>';
+      items.forEach(function(li){
+        html += '<tr><td>' + escapeHtml(li.description) + '</td><td class="num">' + escapeHtml(li.qty) +
+                '</td><td class="num">' + escapeHtml(li.rate) + '</td><td class="num">' + escapeHtml(li.amount) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    } else {
+      html += '<div class="tt-loading">No line items found.</div>';
+    }
+    if(data.grand_total){
+      html += '<div class="tt-total">Total: ₹' + Number(data.grand_total).toLocaleString('en-IN', {maximumFractionDigits: 2}) + '</div>';
+    }
+    tooltip.innerHTML = html;
+  }
+
+  function showLineItemTooltip(event, invoiceId){
+    const tooltip = document.getElementById('lineItemTooltip');
+    positionTooltip(event, tooltip);
+
+    if(!invoiceId){
+      tooltip.innerHTML = '<div class="tt-loading">No invoice file linked.</div>';
+      tooltip.classList.add('open');
+      return;
+    }
+    if(lineItemsCache[invoiceId]){
+      renderTooltip(tooltip, lineItemsCache[invoiceId]);
+      tooltip.classList.add('open');
+      return;
+    }
+    tooltip.innerHTML = '<div class="tt-loading">Loading line items…</div>';
+    tooltip.classList.add('open');
+    fetch('/invoice/' + encodeURIComponent(invoiceId) + '/lineitems')
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+      .then(function(res){
+        lineItemsCache[invoiceId] = res.data;
+        renderTooltip(tooltip, res.data);
+      })
+      .catch(function(){
+        tooltip.innerHTML = '<div class="tt-loading">No line-item data available for this invoice.</div>';
+      });
+  }
+
+  function hideLineItemTooltip(){
+    document.getElementById('lineItemTooltip').classList.remove('open');
+  }
+
+  // ---------- PDF view modal ----------
+  function openPdfModal(invoiceId){
+    const overlay = document.getElementById('pdfModalOverlay');
+    const frame = document.getElementById('pdfModalFrame');
+    const missing = document.getElementById('pdfModalMissing');
+
+    if(!invoiceId){
+      frame.style.display = 'none';
+      missing.style.display = 'block';
+      overlay.classList.add('open');
+      return;
+    }
+
+    const url = '/invoice/' + encodeURIComponent(invoiceId) + '/pdf';
+    overlay.classList.add('open');
+    fetch(url, {method: 'HEAD'}).then(function(r){
+      if(r.ok){
+        frame.src = url;
+        frame.style.display = 'block';
+        missing.style.display = 'none';
+      } else {
+        frame.style.display = 'none';
+        missing.style.display = 'block';
+      }
+    }).catch(function(){
+      frame.style.display = 'none';
+      missing.style.display = 'block';
+    });
+  }
+
+  function closePdfModal(){
+    document.getElementById('pdfModalOverlay').classList.remove('open');
+    document.getElementById('pdfModalFrame').src = '';
+  }
+
+  document.getElementById('pdfModalOverlay').addEventListener('click', function(e){
+    if(e.target === this){ closePdfModal(); }
+  });
+
+  // ---------- Download selected as ZIP ----------
+  function downloadSelected(){
+    const boxes = document.querySelectorAll('#flatTable tbody .row-check:checked');
+    const ids = Array.from(boxes).map(function(cb){ return cb.dataset.invoiceId; }).filter(Boolean);
+    if(ids.length === 0){ return; }
+
+    const includeSummaryEl = document.getElementById('includeSummaryCheck');
+    const includeSummary = includeSummaryEl ? includeSummaryEl.checked : false;
+    const btn = document.querySelector('.download-btn');
+    if(btn){ btn.disabled = true; btn.textContent = 'Preparing…'; }
+
+    fetch('/invoices/download', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({invoice_ids: ids, include_summary: includeSummary, metric: '{{ metric }}'})
+    }).then(function(r){
+      if(!r.ok){ throw new Error('download failed'); }
+      return r.blob();
+    }).then(function(blob){
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'invoices.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    }).catch(function(){
+      alert('Download failed. Please try again.');
+    }).finally(function(){
+      if(btn){ btn.disabled = false; btn.textContent = '⬇ Download selected'; }
+    });
+  }
+
+  function selectAll(checked){
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+    const checkAll = document.getElementById('checkAll');
+    if(checkAll) checkAll.checked = checked;
+    updateSelection();
+  }
+
+  function updateSelection(){
+    const boxes = document.querySelectorAll('#flatTable tbody .row-check');
+    let count = 0, amount = 0, margin = 0;
+    boxes.forEach(cb => {
+      if(cb.checked){
+        count++;
+        amount += parseFloat(cb.dataset.amount || 0);
+        margin += parseFloat(cb.dataset.margin || 0);
+      }
+    });
+    const elCount = document.getElementById('selCount');
+    const elAmount = document.getElementById('selAmount');
+    const elMargin = document.getElementById('selMargin');
+    if(elCount) elCount.textContent = count;
+    if(elAmount) elAmount.textContent = '₹' + amount.toLocaleString('en-IN', {maximumFractionDigits:0});
+    if(elMargin) elMargin.textContent = '₹' + margin.toLocaleString('en-IN', {maximumFractionDigits:0});
+  }
+
+  document.addEventListener('DOMContentLoaded', updateSelection);
+</script>
+<script src="/static/infinite_scroll.js?v=1"></script>
+</body>
+</html>

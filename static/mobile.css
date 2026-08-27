@@ -1,0 +1,72 @@
+/* mobile.css — shared responsive rules, included on every page.
+   Page-specific CSS still wins for anything more particular; this covers
+   the patterns that repeat everywhere: tables, top bars, buttons, modals. */
+
+/* Any table wider than its container gets a horizontal scrollbar instead
+   of blowing out the page layout. Setting the table itself to display:block
+   at narrow widths (a standard trick) keeps thead/tbody/tr/td rendering as
+   normal table cells while the outer element becomes independently
+   scrollable. */
+@media (max-width: 720px) {
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  thead, tbody, tr { display: table-row-group; }
+  thead tr, tbody tr { display: table-row; }
+  th, td { display: table-cell; }
+}
+
+/* Buttons/links styled as buttons stay comfortably tappable. */
+@media (max-width: 720px) {
+  .btn, button, input[type="submit"] {
+    min-height: 40px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .btn.small, .cp-page-btn, .remove-btn, .toggle-btn {
+    min-height: 34px;
+  }
+}
+
+/* Wrap containers meant to hold several inline controls (nav bars, filter
+   bars, field rows) already mostly use flex-wrap in page CSS; this backstops
+   any that don't and tightens spacing so wrapped rows don't feel cramped. */
+@media (max-width: 720px) {
+  .top-nav, .top-actions, .filter-bar, .field-row, .actions {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .top-nav a, .top-actions a, .top-actions button, .top-actions form {
+    flex: 1 1 auto;
+  }
+}
+
+/* Modals (payment date, PDF viewer, card picker) fill more of a small
+   screen rather than floating a fixed-width box that forces zooming. */
+@media (max-width: 640px) {
+  .modal-box, .cp-box {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+  }
+  .pdf-modal-box {
+    width: 96vw;
+    height: 90vh;
+  }
+  .cp-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Base text/spacing scale down slightly so multi-column layouts (New Bill's
+   item table, the ledger table, list pages) stay legible without forcing
+   horizontal zoom on a phone. */
+@media (max-width: 480px) {
+  body { font-size: 14px; }
+  h1 { font-size: 22px !important; }
+  .wrap { padding-left: 14px !important; padding-right: 14px !important; }
+}
