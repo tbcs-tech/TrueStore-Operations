@@ -1,0 +1,405 @@
+/* global.css — Visual polish layer for TrueStore Operations.
+   Loaded on every page alongside mobile.css. Uses the same CSS variable
+   names already defined in each page's inline <style>, so it ENHANCES
+   without overriding any existing layout or color decisions.
+
+   What this adds:
+   - Smooth page-load fade-in
+   - Refined focus rings for keyboard navigation
+   - Better input/select transitions and hover states
+   - Subtle card elevation on hover
+   - Improved table row interactions
+   - Animated flash/banner messages
+   - Better button active states + subtle depth
+   - Polished modal entrance animation
+   - Custom scrollbar styling
+   - Print-friendly rules
+   - Subtle body texture gradient
+*/
+
+/* ─── Page entrance ─────────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+body {
+  animation: fadeInUp 0.35s ease-out;
+}
+
+/* ─── Subtle background refinement ──────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at 20% 0%, rgba(192, 138, 46, 0.03) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ─── Focus rings — accessible, stylish ────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--accent, #C08A2E);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent, #C08A2E);
+  outline-offset: 0;
+  border-color: var(--accent, #C08A2E) !important;
+  box-shadow: 0 0 0 3px rgba(192, 138, 46, 0.12);
+}
+
+/* ─── Inputs & selects — refined interaction ───────────────────────────── */
+input[type=text], input[type=date], input[type=number],
+input[type=password], input[type=email], input[type=search],
+select, textarea {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.15s ease;
+}
+input[type=text]:hover, input[type=date]:hover, input[type=number]:hover,
+input[type=password]:hover, input[type=email]:hover, input[type=search]:hover,
+select:hover, textarea:hover {
+  border-color: var(--ink-soft, #5c645f) !important;
+}
+
+/* ─── Buttons — depth and active press ─────────────────────────────────── */
+.btn, button[type=submit], input[type=submit] {
+  transition: all 0.15s ease;
+  position: relative;
+}
+.btn:not(:disabled):hover, button[type=submit]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(28, 35, 33, 0.12);
+}
+.btn:not(:disabled):active, button[type=submit]:active {
+  transform: translateY(0.5px);
+  box-shadow: none;
+}
+/* Outline/secondary buttons get a subtle fill on hover */
+.btn.outline:hover, .btn.secondary:hover {
+  background: var(--paper, #f6f3ec) !important;
+}
+
+/* Dark buttons glow slightly */
+.btn.dark:hover {
+  box-shadow: 0 2px 12px rgba(28, 35, 33, 0.25);
+}
+
+/* ─── Back/nav links — smooth color transition ─────────────────────────── */
+.top-nav a, .tool-nav a {
+  transition: all 0.15s ease;
+}
+.top-nav a:hover {
+  background: var(--paper-raised, #fffdf8) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* ─── Cards — gentle lift ──────────────────────────────────────────────── */
+.card {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card:hover {
+  box-shadow: 0 3px 14px rgba(28, 35, 33, 0.06);
+  border-color: var(--rule-strong, #c9c2ab);
+}
+
+/* ─── Summary stat boxes — subtle hover highlight ──────────────────────── */
+.stat {
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.stat:hover {
+  background: #fff;
+  box-shadow: inset 0 -3px 0 var(--accent, #C08A2E);
+}
+
+/* ─── Filter bar — refined ─────────────────────────────────────────────── */
+.filter-bar {
+  border-radius: 4px;
+  transition: box-shadow 0.15s ease;
+}
+.filter-bar:focus-within {
+  box-shadow: 0 0 0 2px rgba(192, 138, 46, 0.1);
+  border-color: var(--accent, #C08A2E);
+}
+
+/* ─── Tables — elegant row interactions ────────────────────────────────── */
+table.flat-table td,
+table.ledger-table td,
+.invoice-table td {
+  transition: background 0.12s ease;
+}
+table.flat-table tbody tr:hover td {
+  background: #F0ECE2 !important;
+}
+/* Ledger customer rows — lift effect */
+tr.customer-row-tr {
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+tr.customer-row-tr:hover {
+  background: #EDEAE0 !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+/* Data cell alignment polish */
+td.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Status pills — smoother transitions ──────────────────────────────── */
+.status-pill, .pill {
+  transition: all 0.15s ease;
+  font-variant-numeric: tabular-nums;
+}
+.status-pill:hover, .pill:hover {
+  transform: scale(1.04);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+}
+
+/* ─── Split tags ───────────────────────────────────────────────────────── */
+.split-tag {
+  transition: background 0.12s ease;
+}
+
+/* ─── Flash / banner messages — slide in ───────────────────────────────── */
+@keyframes slideInBanner {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.flash, .banner {
+  animation: slideInBanner 0.3s ease-out;
+}
+
+/* ─── Modals — fade + scale entrance ───────────────────────────────────── */
+.modal-overlay, .cp-overlay {
+  transition: opacity 0.2s ease;
+}
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-overlay.open .modal-box,
+.modal-overlay.open .pdf-modal-box,
+.cp-overlay.open .cp-box {
+  animation: modalEnter 0.25s ease-out;
+}
+
+/* ─── Card picker cards — better hover ─────────────────────────────────── */
+.cp-card {
+  transition: all 0.15s ease;
+}
+.cp-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.1) !important;
+  border-color: var(--ink, #1c2321) !important;
+}
+.cp-card-added {
+  position: relative;
+}
+.cp-card-added::after {
+  content: '✓';
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 14px;
+  color: var(--paid, #3f6b4f);
+  font-weight: 700;
+}
+
+/* ─── Autocomplete dropdown — polished ─────────────────────────────────── */
+.ac-results {
+  border-radius: 0 0 4px 4px;
+}
+.ac-item {
+  transition: background 0.1s ease;
+}
+.ac-item:hover {
+  background: var(--paper, #f6f3ec) !important;
+}
+
+/* ─── Scroll jump buttons — refined ────────────────────────────────────── */
+.scroll-jump-btn {
+  transition: all 0.18s ease;
+  backdrop-filter: blur(6px);
+  background: rgba(252, 251, 248, 0.92);
+}
+.scroll-jump-btn:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2) !important;
+}
+
+/* ─── View tabs — selected indicator ───────────────────────────────────── */
+.view-tabs a {
+  transition: all 0.12s ease;
+  position: relative;
+}
+.view-tabs a.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent, #C08A2E);
+}
+
+/* ─── Checkbox — styled ────────────────────────────────────────────────── */
+input[type=checkbox].row-check {
+  accent-color: var(--paid, #3f6b4f);
+  transition: transform 0.1s ease;
+}
+input[type=checkbox].row-check:hover {
+  transform: scale(1.12);
+}
+
+/* ─── Totals box — highlight ───────────────────────────────────────────── */
+.totals-box .grand {
+  color: var(--ink, #1c2321);
+  position: relative;
+  display: inline-block;
+}
+.totals-box .grand::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent, #C08A2E);
+  opacity: 0.5;
+  border-radius: 2px;
+}
+
+/* ─── Selection bar — subtle polish ────────────────────────────────────── */
+.selection-bar {
+  border-radius: 3px 3px 0 0;
+}
+.selection-bar .btn.download-btn {
+  transition: all 0.15s ease;
+}
+.selection-bar .btn.download-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(192, 138, 46, 0.3);
+}
+
+/* ─── Remove buttons — subtle ──────────────────────────────────────────── */
+.remove-btn {
+  transition: all 0.12s ease;
+  border-radius: 2px;
+  padding: 2px 6px !important;
+}
+.remove-btn:hover {
+  background: var(--overdue-soft, #f3e3dd) !important;
+  transform: scale(1.15);
+}
+
+/* ─── Header h1 — subtle text shadow ──────────────────────────────────── */
+h1 {
+  text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+}
+
+/* ─── Header border — accent fade ──────────────────────────────────────── */
+header.top {
+  border-image: linear-gradient(to right, var(--ink, #1c2321) 0%, var(--ink, #1c2321) 60%, var(--accent, #C08A2E) 100%) 1;
+}
+
+/* ─── Caret rotation — smoother ────────────────────────────────────────── */
+.caret {
+  transition: transform 0.2s ease !important;
+}
+
+/* ─── Login box — centered glow ────────────────────────────────────────── */
+.box {
+  box-shadow: 0 8px 32px rgba(28, 35, 33, 0.08), 0 1px 3px rgba(28, 35, 33, 0.05);
+  transition: box-shadow 0.2s ease;
+}
+.box:focus-within {
+  box-shadow: 0 8px 40px rgba(28, 35, 33, 0.12), 0 0 0 2px rgba(192, 138, 46, 0.15);
+}
+
+/* ─── Tooltip — refined shadow ─────────────────────────────────────────── */
+.line-item-tooltip {
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.08) !important;
+  border-radius: 4px !important;
+}
+
+/* ─── Custom scrollbar (webkit) ────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--rule-strong, #c9c2ab);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-soft, #5c645f);
+  background-clip: content-box;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong, #c9c2ab) transparent;
+}
+
+/* ─── Selection highlight ──────────────────────────────────────────────── */
+::selection {
+  background: rgba(192, 138, 46, 0.2);
+  color: var(--ink, #1c2321);
+}
+
+/* ─── Print styles ─────────────────────────────────────────────────────── */
+@media print {
+  body { background: #fff !important; animation: none !important; }
+  body::before { display: none; }
+  .top-nav, .top-actions, .tool-nav, .filter-bar,
+  .scroll-jump-stack, .btn, button, .selection-bar { display: none !important; }
+  .wrap { max-width: 100%; padding: 0; }
+  table { page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  .card { box-shadow: none; border: 1px solid #ccc; }
+  .stat { box-shadow: none; }
+}
+
+/* ─── Reduced motion preference ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Brand mark ledger-no pill — subtle shimmer on hover ──────────────── */
+.brand-mark .ledger-no {
+  transition: all 0.15s ease;
+}
+.brand-mark .ledger-no:hover {
+  background: var(--paper-raised, #fffdf8);
+  border-color: var(--accent, #C08A2E);
+  color: var(--accent, #C08A2E);
+}
+
+/* ─── Empty cart state — gentler ───────────────────────────────────────── */
+.empty-cart {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* ─── Table sticky headers — shadow on scroll ──────────────────────────── */
+table.flat-table th {
+  z-index: 10;
+}
+table.flat-table th::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--rule-strong, #c9c2ab);
+}

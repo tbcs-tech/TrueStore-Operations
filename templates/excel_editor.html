@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ file_label }} · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/global.css?v=1">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; --accent:#C08A2E; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:1400px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn.small{padding:5px 10px;font-size:11px;}
+  .btn.outline{background:transparent;color:var(--ink);}
+  .btn.accent{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn:disabled{opacity:0.5;cursor:not-allowed;}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .spacer{flex:1;}
+  .status{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 10px;border-radius:2px;}
+  .status.ok{background:var(--paid-soft);color:var(--paid);}
+  .status.err{background:var(--overdue-soft);color:var(--overdue);}
+  .status.hidden{display:none;}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:0;border-bottom:2px solid var(--ink);}
+  .tab{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;background:var(--paper);border:1px solid var(--rule-strong);border-bottom:none;border-radius:3px 3px 0 0;cursor:pointer;color:var(--ink-soft);}
+  .tab.active{background:var(--paper-raised);color:var(--ink);font-weight:600;border-color:var(--ink);position:relative;top:2px;}
+  .sheet-panel{display:none;background:var(--paper-raised);border:1px solid var(--rule-strong);border-top:none;overflow:auto;max-height:70vh;}
+  .sheet-panel.active{display:block;}
+  .grid{border-collapse:collapse;font-size:12.5px;min-width:100%;}
+  .grid th{position:sticky;top:0;background:var(--ink);color:var(--paper);font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;padding:6px 8px;text-align:left;white-space:nowrap;z-index:2;}
+  .grid th.rownum-h{width:40px;text-align:center;position:sticky;left:0;z-index:3;}
+  .grid td{border:1px solid var(--rule);padding:0;}
+  .grid td.rownum{background:var(--paper);color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:10px;text-align:center;width:40px;position:sticky;left:0;user-select:none;}
+  .grid td.header-row{background:var(--paper);font-weight:600;}
+  .cell-input{width:100%;min-width:90px;border:none;padding:6px 8px;font-size:12.5px;font-family:'Inter',sans-serif;background:transparent;color:var(--ink);}
+  .cell-input:focus{outline:2px solid var(--accent);outline-offset:-2px;background:#fff;}
+  .row-del-btn{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--overdue);cursor:pointer;background:none;border:none;padding:2px 4px;}
+  .sheet-footer{display:flex;gap:8px;padding:10px;border:1px solid var(--rule-strong);border-top:none;background:var(--paper);}
+  .empty-note{padding:30px;text-align:center;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .row-actions-th{width:30px;}
+</style>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/settings">&larr; Settings</a>
+    <span>TrueStore Operations</span>
+  </div>
+  <h1>{{ file_label }}</h1>
+  <div class="subtitle">
+    {% if file_exists %}
+      Editing live — changes save back to this file on the server. A timestamped backup is kept before every save.
+    {% else %}
+      This file doesn't exist yet on the server. Add a sheet below to create it, or upload one from Settings.
+    {% endif %}
+  </div>
+
+  <div class="toolbar">
+    <button class="btn outline small" onclick="addSheet()">+ Add Sheet</button>
+    <a class="btn outline small" href="/settings/excel/{{ file_key }}/download">Download .xlsx</a>
+    <div class="spacer"></div>
+    <span id="statusMsg" class="status hidden"></span>
+    <button class="btn accent" id="saveBtn" onclick="saveAll()">Save Changes</button>
+  </div>
+
+  <div class="tabs" id="tabsRow"></div>
+  <div id="panelsRow"></div>
+</div>
+
+<script>
+const FILE_KEY = {{ file_key|tojson }};
+let sheets = {{ sheets_json|safe }};
+let activeSheet = null;
+
+function esc(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function render(){
+  const tabsRow = document.getElementById('tabsRow');
+  const panelsRow = document.getElementById('panelsRow');
+  tabsRow.innerHTML = '';
+  panelsRow.innerHTML = '';
+
+  const names = Object.keys(sheets);
+  if(names.length === 0){
+    panelsRow.innerHTML = '<div class="empty-note">No sheets yet. Click "+ Add Sheet" to start.</div>';
+    return;
+  }
+  if(!activeSheet || !names.includes(activeSheet)){
+    activeSheet = names[0];
+  }
+
+  names.forEach(function(name){
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (name === activeSheet ? ' active' : '');
+    tab.textContent = name + ' (' + sheets[name].length + ')';
+    tab.onclick = function(){ activeSheet = name; render(); };
+    tabsRow.appendChild(tab);
+
+    const panel = document.createElement('div');
+    panel.className = 'sheet-panel' + (name === activeSheet ? ' active' : '');
+    panel.appendChild(buildGrid(name));
+    panelsRow.appendChild(panel);
+
+    if(name === activeSheet){
+      const footer = document.createElement('div');
+      footer.className = 'sheet-footer';
+      footer.innerHTML =
+        '<button class="btn outline small" onclick="addRow(\'' + name.replace(/'/g,"\\'") + '\')">+ Add Row</button>' +
+        '<button class="btn outline small" onclick="addColumn(\'' + name.replace(/'/g,"\\'") + '\')">+ Add Column</button>' +
+        '<button class="btn outline small" onclick="renameSheet(\'' + name.replace(/'/g,"\\'") + '\')">Rename Sheet</button>' +
+        '<button class="btn outline small" onclick="deleteSheet(\'' + name.replace(/'/g,"\\'") + '\')" style="color:var(--overdue);">Delete Sheet</button>';
+      panelsRow.appendChild(footer);
+    }
+  });
+}
+
+function buildGrid(name){
+  const rows = sheets[name];
+  const table = document.createElement('table');
+  table.className = 'grid';
+
+  const maxCols = rows.reduce(function(m, r){ return Math.max(m, r.length); }, 1);
+
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  trh.innerHTML = '<th class="rownum-h">#</th><th class="row-actions-th"></th>';
+  for(let c = 0; c < maxCols; c++){
+    const th = document.createElement('th');
+    th.textContent = colLabel(c);
+    trh.appendChild(th);
+  }
+  thead.appendChild(trh);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rows.forEach(function(row, r){
+    const tr = document.createElement('tr');
+    const rownumTd = document.createElement('td');
+    rownumTd.className = 'rownum';
+    rownumTd.textContent = (r + 1);
+    tr.appendChild(rownumTd);
+
+    const delTd = document.createElement('td');
+    const delBtn = document.createElement('button');
+    delBtn.className = 'row-del-btn';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Delete row';
+    delBtn.onclick = function(){ deleteRow(name, r); };
+    delTd.appendChild(delBtn);
+    tr.appendChild(delTd);
+
+    for(let c = 0; c < maxCols; c++){
+      const td = document.createElement('td');
+      if(r === 0){ td.classList.add('header-row'); }
+      const input = document.createElement('input');
+      input.className = 'cell-input';
+      input.value = row[c] !== undefined ? row[c] : '';
+      input.addEventListener('change', function(){
+        while(sheets[name][r].length <= c){ sheets[name][r].push(''); }
+        sheets[name][r][c] = input.value;
+        markDirty();
+      });
+      td.appendChild(input);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  return table;
+}
+
+function colLabel(i){
+  let s = '';
+  i += 1;
+  while(i > 0){
+    const rem = (i - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    i = Math.floor((i - 1) / 26);
+  }
+  return s;
+}
+
+function addRow(name){
+  const maxCols = sheets[name].reduce(function(m, r){ return Math.max(m, r.length); }, 1);
+  sheets[name].push(new Array(maxCols).fill(''));
+  markDirty();
+  render();
+}
+
+function deleteRow(name, idx){
+  if(!confirm('Delete row ' + (idx + 1) + ' from ' + name + '?')) return;
+  sheets[name].splice(idx, 1);
+  markDirty();
+  render();
+}
+
+function addColumn(name){
+  sheets[name].forEach(function(row){ row.push(''); });
+  markDirty();
+  render();
+}
+
+function addSheet(){
+  const name = prompt('New sheet name:');
+  if(!name) return;
+  if(sheets[name]){ alert('A sheet with that name already exists.'); return; }
+  sheets[name] = [['']];
+  activeSheet = name;
+  markDirty();
+  render();
+}
+
+function renameSheet(oldName){
+  const newName = prompt('Rename sheet:', oldName);
+  if(!newName || newName === oldName) return;
+  if(sheets[newName]){ alert('A sheet with that name already exists.'); return; }
+  const ordered = {};
+  Object.keys(sheets).forEach(function(k){
+    ordered[k === oldName ? newName : k] = sheets[k];
+  });
+  sheets = ordered;
+  activeSheet = newName;
+  markDirty();
+  render();
+}
+
+function deleteSheet(name){
+  if(!confirm('Delete the entire sheet "' + name + '"? This cannot be undone once saved.')) return;
+  delete sheets[name];
+  activeSheet = null;
+  markDirty();
+  render();
+}
+
+let dirty = false;
+function markDirty(){
+  dirty = true;
+  const s = document.getElementById('statusMsg');
+  s.className = 'status';
+  s.textContent = 'Unsaved changes';
+}
+
+window.addEventListener('beforeunload', function(e){
+  if(dirty){ e.preventDefault(); e.returnValue = ''; }
+});
+
+function saveAll(){
+  const btn = document.getElementById('saveBtn');
+  const s = document.getElementById('statusMsg');
+  btn.disabled = true;
+  s.className = 'status';
+  s.textContent = 'Saving…';
+
+  fetch('/settings/excel/' + FILE_KEY + '/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({sheets: sheets})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    btn.disabled = false;
+    if(data.ok){
+      dirty = false;
+      s.className = 'status ok';
+      s.textContent = 'Saved ✓';
+      setTimeout(function(){ s.className = 'status hidden'; }, 3000);
+    } else {
+      s.className = 'status err';
+      s.textContent = 'Error: ' + (data.error || 'save failed');
+    }
+  })
+  .catch(function(err){
+    btn.disabled = false;
+    s.className = 'status err';
+    s.textContent = 'Error: ' + err;
+  });
+}
+
+render();
+</script>
+</body>
+</html>

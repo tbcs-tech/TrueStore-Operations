@@ -10,6 +10,8 @@ import zipfile
 from collections import defaultdict
 from logging.handlers import RotatingFileHandler
 
+import openpyxl
+
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -654,6 +656,127 @@ def settings():
                             business_profile=business_profile)
 
 
+# --------------------------------------------------------------------------- #
+# In-browser Excel editor - lets admin view/edit billdesk.xlsx and
+# sales_log.xlsx sheet-by-sheet without needing Excel installed. Generic:
+# works with any sheet/column layout since it just mirrors cells 1:1.
+# --------------------------------------------------------------------------- #
+EXCEL_FILES = {
+    "billdesk": lambda: BILLDESK_FILE,
+    "sales_log": lambda: DEFAULT_FILE,
+}
+
+
+def _excel_path(file_key):
+    getter = EXCEL_FILES.get(file_key)
+    return getter() if getter else None
+
+
+def _read_workbook_as_json(path):
+    """Returns {sheet_name: [[cell, cell, ...], ...]} - all values stringified
+    for safe editing in a plain HTML table. Empty workbook if file missing."""
+    if not os.path.exists(path):
+        return {}
+    wb = openpyxl.load_workbook(path, data_only=True)
+    sheets = {}
+    for name in wb.sheetnames:
+        sht = wb[name]
+        rows = []
+        for row in sht.iter_rows():
+            rows.append(["" if c.value is None else str(c.value) for c in row])
+        # Trim fully-empty trailing rows so the grid isn't full of blanks
+        while rows and all(v == "" for v in rows[-1]):
+            rows.pop()
+        sheets[name] = rows
+    return sheets
+
+
+def _coerce_cell(value):
+    """Best-effort: turn a plain string back into int/float when it looks
+    numeric, else keep as string - keeps sheets usable by migration.py,
+    which reads .value directly."""
+    if value == "":
+        return None
+    try:
+        if "." in value:
+            return float(value)
+        return int(value)
+    except (ValueError, TypeError):
+        return value
+
+
+@app.route("/settings/excel/<file_key>")
+@login_required
+@role_required("admin")
+def settings_excel_editor(file_key):
+    path = _excel_path(file_key)
+    if path is None:
+        flash("Unknown file.")
+        return redirect(url_for("settings"))
+    sheets = _read_workbook_as_json(path)
+    return render_template("excel_editor.html", file_key=file_key,
+                            file_label="billdesk.xlsx" if file_key == "billdesk" else "sales_log.xlsx",
+                            sheets_json=json.dumps(sheets),
+                            file_exists=os.path.exists(path))
+
+
+@app.route("/settings/excel/<file_key>/save", methods=["POST"])
+@login_required
+@role_required("admin")
+def settings_excel_save(file_key):
+    path = _excel_path(file_key)
+    if path is None:
+        return jsonify({"ok": False, "error": "unknown file"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    sheets = payload.get("sheets")
+    if not isinstance(sheets, dict) or not sheets:
+        return jsonify({"ok": False, "error": "no sheet data received"}), 400
+
+    # Backup the existing file before overwriting, timestamped, kept in
+    # data/backups/excel/ so a bad edit can always be undone manually.
+    if os.path.exists(path):
+        backup_dir = os.path.join(DATA_DIR, "backups", "excel")
+        os.makedirs(backup_dir, exist_ok=True)
+        stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"{file_key}_{stamp}.xlsx"
+        try:
+            import shutil
+            shutil.copy2(path, os.path.join(backup_dir, backup_name))
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"backup failed, aborted save: {e}"}), 500
+
+    try:
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)  # drop the default blank sheet
+        for sheet_name, rows in sheets.items():
+            # Excel sheet names: max 31 chars, no []:*?/\\
+            safe_name = re.sub(r"[\[\]:*?/\\]", "_", str(sheet_name))[:31] or "Sheet1"
+            sht = wb.create_sheet(title=safe_name)
+            for row in rows:
+                sht.append([_coerce_cell(v) for v in row])
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp_path = path + ".tmp"
+        wb.save(tmp_path)
+        os.replace(tmp_path, path)  # atomic swap - avoids a half-written file
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"save failed: {e}"}), 500
+
+    return jsonify({"ok": True})
+
+
+@app.route("/settings/excel/<file_key>/download")
+@login_required
+@role_required("admin")
+def settings_excel_download(file_key):
+    path = _excel_path(file_key)
+    if path is None or not os.path.exists(path):
+        flash("File not found.")
+        return redirect(url_for("settings"))
+    return send_file(path, as_attachment=True,
+                      download_name="billdesk.xlsx" if file_key == "billdesk" else "sales_log.xlsx")
+
+
 @app.route("/settings/business-profile", methods=["POST"])
 @login_required
 @role_required("admin")
@@ -1006,8 +1129,7 @@ def bills_api_new():
         billing_engine.write_cost_report(final_data, cost_map)
 
         pdf_bytes = bill_pdf.build_invoice_pdf(final_data, lines, hsn_summary)
-        folder = rrl.local_folder_name(final_data["Date"])
-        pdf_path = os.path.join(BASE_DIR, "record_room", folder, final_data["fileName"] + ".pdf")
+        pdf_path = os.path.join(BASE_DIR, "data", "invoices", final_data["fileName"] + ".pdf")
         with open(pdf_path, "wb") as f:
             f.write(pdf_bytes)
 
@@ -1165,8 +1287,7 @@ def bills_edit(invoice_no):
             billing_engine.write_cost_report(final_data, cost_map)
 
             pdf_bytes = bill_pdf.build_invoice_pdf(final_data, lines, hsn_summary)
-            folder = rrl.local_folder_name(final_data["Date"])
-            pdf_path = os.path.join(BASE_DIR, "record_room", folder, final_data["fileName"] + ".pdf")
+            pdf_path = os.path.join(BASE_DIR, "data", "invoices", final_data["fileName"] + ".pdf")
             with open(pdf_path, "wb") as f:
                 f.write(pdf_bytes)
 
@@ -1207,6 +1328,12 @@ def bills_split(invoice_no):
 
     existing_lines = db.get_bill_lines(bill["id"])
     item_level = len(existing_lines) > 0 and all(l["product_id"] for l in existing_lines)
+
+    # Enrich lines with product category (sheet name) for the category filter
+    if item_level:
+        for line in existing_lines:
+            product = db.get_product(line["product_id"])
+            line["category"] = product["sheet"] if product else ""
 
     if request.method == "POST":
         payload = request.get_json(silent=True) or {}
@@ -1266,8 +1393,7 @@ def bills_split(invoice_no):
                     billing_engine.write_record_room_json(final_data)
                     billing_engine.write_cost_report(final_data, cost_map)
                     pdf_bytes = bill_pdf.build_invoice_pdf(final_data, part_lines, hsn_summary)
-                    folder = rrl.local_folder_name(final_data["Date"])
-                    pdf_path = os.path.join(BASE_DIR, "record_room", folder, final_data["fileName"] + ".pdf")
+                    pdf_path = os.path.join(BASE_DIR, "data", "invoices", final_data["fileName"] + ".pdf")
                     with open(pdf_path, "wb") as f:
                         f.write(pdf_bytes)
 
@@ -1340,8 +1466,7 @@ def bills_split(invoice_no):
                       "gst_pct": 0, "rate": part_amount, "amount": part_amount}],
                     [],
                 )
-                folder = rrl.local_folder_name(final_data["Date"])
-                pdf_path = os.path.join(BASE_DIR, "record_room", folder, file_name + ".pdf")
+                pdf_path = os.path.join(BASE_DIR, "data", "invoices", file_name + ".pdf")
                 with open(pdf_path, "wb") as f:
                     f.write(pdf_bytes)
 
@@ -1361,23 +1486,28 @@ def bills_split(invoice_no):
 
         return jsonify({"ok": True, "created": created})
 
-    return render_template("bills_split.html", bill=bill, existing_lines=existing_lines, item_level=item_level)
+    return render_template("bills_split.html", bill=bill, existing_lines=existing_lines, item_level=item_level,
+                            categories=sorted({l.get("category", "") for l in existing_lines} - {""}))
 
 
 @app.route("/bills/pdf/<file_name>")
 @login_required
 @role_required("admin", "sales")
 def bills_pdf(file_name):
-    # file_name is "{Invoice}_{ddmmyyyy}" - derive the mm_dd_yyyy folder from
-    # the trailing ddmmyyyy segment.
     if "_" not in file_name or not re.match(r"^.+_\d{8}$", file_name):
         return jsonify({"ok": False, "error": "invalid file name"}), 400
-    ddmmyyyy = file_name[-8:]
-    dd, mm, yyyy = ddmmyyyy[:2], ddmmyyyy[2:4], ddmmyyyy[4:]
-    folder = f"{mm}_{dd}_{yyyy}"
     path = rrl.resolve_case_insensitive(
-        os.path.join(BASE_DIR, "record_room", folder, file_name + ".pdf")
+        os.path.join(BASE_DIR, "data", "invoices", file_name + ".pdf")
     )
+    if not os.path.exists(path):
+        # Fallback: older bills that may still sit in the legacy
+        # record_room/<mm_dd_yyyy>/ date-folder layout.
+        ddmmyyyy = file_name[-8:]
+        dd, mm, yyyy = ddmmyyyy[:2], ddmmyyyy[2:4], ddmmyyyy[4:]
+        folder = f"{mm}_{dd}_{yyyy}"
+        path = rrl.resolve_case_insensitive(
+            os.path.join(BASE_DIR, "record_room", folder, file_name + ".pdf")
+        )
     if not os.path.exists(path):
         return jsonify({"ok": False, "error": "not found"}), 404
     return send_file(path, mimetype="application/pdf")
@@ -2122,8 +2252,7 @@ def deliveries_invoice_create():
         billing_engine.write_cost_report(final_data, cost_map)
 
         pdf_bytes = bill_pdf.build_invoice_pdf(final_data, lines, hsn_summary)
-        folder = rrl.local_folder_name(final_data["Date"])
-        pdf_path = os.path.join(BASE_DIR, "record_room", folder, final_data["fileName"] + ".pdf")
+        pdf_path = os.path.join(BASE_DIR, "data", "invoices", final_data["fileName"] + ".pdf")
         with open(pdf_path, "wb") as f:
             f.write(pdf_bytes)
 

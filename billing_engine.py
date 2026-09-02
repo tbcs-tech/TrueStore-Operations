@@ -338,8 +338,9 @@ def build_final_data(customer, lines, invoice_no, date_str, bill_type):
 
 
 def write_record_room_json(final_data):
-    folder = rrl.local_folder_name(final_data["Date"])
-    directory = os.path.join(RECORD_ROOM_BASE, "record_room", folder)
+    """Saves the invoice JSON flat under data/invoices/{fileName}.json —
+    matches the existing flat archive layout (no date subfolders)."""
+    directory = os.path.join(RECORD_ROOM_BASE, "data", "invoices")
     os.makedirs(directory, exist_ok=True)
     path = os.path.join(directory, final_data["fileName"] + ".json")
     with open(path, "w") as f:
@@ -348,9 +349,9 @@ def write_record_room_json(final_data):
 
 
 def write_cost_report(final_data, cost_map):
-    """{item_description: cost_price} - lets record_room_lookup recompute margin later."""
-    folder = rrl.local_folder_name(final_data["Date"])
-    directory = os.path.join(RECORD_ROOM_BASE, "record_room", folder)
+    """{item_description: cost_price} - saved alongside the invoice JSON in
+    data/invoices/ (flat, matches the existing archive layout)."""
+    directory = os.path.join(RECORD_ROOM_BASE, "data", "invoices")
     os.makedirs(directory, exist_ok=True)
     path = os.path.join(directory, final_data["fileName"] + "_CostReport.json")
     with open(path, "w") as f:
