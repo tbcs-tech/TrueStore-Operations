@@ -7,6 +7,7 @@ import string
 import logging
 import datetime
 import zipfile
+import shutil
 from collections import defaultdict
 from logging.handlers import RotatingFileHandler
 
@@ -38,6 +39,10 @@ BILLDESK_FILE = os.path.join(DATA_DIR, "billdesk.xlsx")
 SECRET_KEY_FILE = os.path.join(DATA_DIR, "secret_key.txt")
 
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "invoices"), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "purchases"), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "deliveries"), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "backups"), exist_ok=True)
 
 
 def _load_or_create_secret_key():
@@ -79,7 +84,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=IS_PRODUCTION,  # only send the cookie over https
-    PERMANENT_SESSION_LIFETIME=datetime.timedelta(days=7),
+    PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=8),
 )
 
 if not app.debug:
@@ -295,6 +300,45 @@ def admin_users_toggle_active(user_id):
     if user:
         db.set_user_active(user_id, not user["active"])
     return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/reset-password", methods=["POST"])
+@login_required
+@role_required("admin")
+def admin_reset_password(user_id):
+    new_pw = request.form.get("new_password", "")
+    if len(new_pw) < 8:
+        flash("Password must be at least 8 characters.")
+    else:
+        user = db.get_user(user_id)
+        if user:
+            db.admin_reset_user_password(user_id, new_pw)
+            flash(f"Password reset for {user['username']}.")
+        else:
+            flash("User not found.")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    user = current_user()
+    if request.method == "POST":
+        current_pw = request.form.get("current_password", "")
+        new_pw = request.form.get("new_password", "")
+        confirm_pw = request.form.get("confirm_password", "")
+        verified = db.verify_login(user["username"], current_pw)
+        if not verified:
+            flash("Current password is incorrect.")
+        elif len(new_pw) < 8:
+            flash("New password must be at least 8 characters.")
+        elif new_pw != confirm_pw:
+            flash("New passwords don't match.")
+        else:
+            db.change_user_password(user["id"], new_pw)
+            flash("Password changed successfully.")
+            return redirect(url_for("home"))
+    return render_template("change_password.html")
 
 
 @app.route("/admin/users/<int:user_id>/employment", methods=["POST"])
@@ -741,7 +785,6 @@ def settings_excel_save(file_key):
         stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{file_key}_{stamp}.xlsx"
         try:
-            import shutil
             shutil.copy2(path, os.path.join(backup_dir, backup_name))
         except Exception as e:
             return jsonify({"ok": False, "error": f"backup failed, aborted save: {e}"}), 500
@@ -775,6 +818,29 @@ def settings_excel_download(file_key):
         return redirect(url_for("settings"))
     return send_file(path, as_attachment=True,
                       download_name="billdesk.xlsx" if file_key == "billdesk" else "sales_log.xlsx")
+
+
+@app.route("/settings/excel/<file_key>/upload", methods=["POST"])
+@login_required
+@role_required("admin")
+def settings_excel_upload(file_key):
+    path = _excel_path(file_key)
+    if path is None:
+        flash("Unknown file.")
+        return redirect(url_for("settings"))
+    file = request.files.get("file")
+    if not file or not file.filename.endswith((".xlsx", ".xls")):
+        flash("Please upload a valid .xlsx file.")
+        return redirect(url_for("settings_excel_editor", file_key=file_key))
+    # Backup existing before overwriting
+    if os.path.exists(path):
+        backup_dir = os.path.join(DATA_DIR, "backups", "excel")
+        os.makedirs(backup_dir, exist_ok=True)
+        stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        shutil.copy2(path, os.path.join(backup_dir, f"{file_key}_{stamp}.xlsx"))
+    file.save(path)
+    flash(f"Uploaded {file.filename} — the editor now shows the new data.")
+    return redirect(url_for("settings_excel_editor", file_key=file_key))
 
 
 @app.route("/settings/business-profile", methods=["POST"])
@@ -2001,9 +2067,7 @@ def deliveries_new():
 
 def _write_delivery_pdfs(receipt_no, date_str, customer_name, lines):
     """Writes both the customer-copy and office-copy PDFs for a delivery receipt."""
-    folder = rrl.local_folder_name(date_str)
-    pdf_dir = os.path.join(BASE_DIR, "delivery_room", folder)
-    os.makedirs(pdf_dir, exist_ok=True)
+    pdf_dir = os.path.join(DATA_DIR, "deliveries")
     for copy_type in ("customer", "office"):
         pdf_bytes = delivery_pdf.build_delivery_pdf(receipt_no, date_str, customer_name, lines, copy_type)
         with open(os.path.join(pdf_dir, f"{receipt_no}_{copy_type}.pdf"), "wb") as f:
@@ -2291,10 +2355,15 @@ def deliveries_pdf(receipt_no):
     receipt = db.get_delivery_receipt(receipt_no)
     if not receipt:
         return jsonify({"ok": False, "error": "not found"}), 404
-    folder = rrl.local_folder_name(receipt["date"])
     path = rrl.resolve_case_insensitive(
-        os.path.join(BASE_DIR, "delivery_room", folder, f"{receipt_no}_{copy_type}.pdf")
+        os.path.join(DATA_DIR, "deliveries", f"{receipt_no}_{copy_type}.pdf")
     )
+    if not os.path.exists(path):
+        # Fallback: older deliveries in legacy delivery_room/<date>/ layout
+        folder = rrl.local_folder_name(receipt["date"])
+        path = rrl.resolve_case_insensitive(
+            os.path.join(BASE_DIR, "delivery_room", folder, f"{receipt_no}_{copy_type}.pdf")
+        )
     if not os.path.exists(path):
         return jsonify({"ok": False, "error": "not found"}), 404
     return send_file(path, mimetype="application/pdf")
@@ -2513,9 +2582,7 @@ def purchases_api_new():
         }
 
         pdf_bytes = purchase_pdf.build_purchase_pdf(purchase_data, lines)
-        folder = rrl.local_folder_name(date_str)
-        pdf_dir = os.path.join(BASE_DIR, "purchase_room", folder)
-        os.makedirs(pdf_dir, exist_ok=True)
+        pdf_dir = os.path.join(DATA_DIR, "purchases")
         with open(os.path.join(pdf_dir, file_name + ".pdf"), "wb") as f:
             f.write(pdf_bytes)
         with open(os.path.join(pdf_dir, file_name + ".json"), "w") as f:
@@ -2742,9 +2809,7 @@ def purchases_edit(purchase_no):
                 "total": totals["total"], "amount_in_words": totals["finalAmountWord"],
             }
             pdf_bytes = purchase_pdf.build_purchase_pdf(purchase_data, lines)
-            folder = rrl.local_folder_name(bill["date"])
-            pdf_dir = os.path.join(BASE_DIR, "purchase_room", folder)
-            os.makedirs(pdf_dir, exist_ok=True)
+            pdf_dir = os.path.join(DATA_DIR, "purchases")
             with open(os.path.join(pdf_dir, bill["file_name"] + ".pdf"), "wb") as f:
                 f.write(pdf_bytes)
             with open(os.path.join(pdf_dir, bill["file_name"] + ".json"), "w") as f:
@@ -2776,12 +2841,17 @@ def purchases_edit(purchase_no):
 def purchases_pdf(file_name):
     if "_" not in file_name or not re.match(r"^.+_\d{8}$", file_name):
         return jsonify({"ok": False, "error": "invalid file name"}), 400
-    ddmmyyyy = file_name[-8:]
-    dd, mm, yyyy = ddmmyyyy[:2], ddmmyyyy[2:4], ddmmyyyy[4:]
-    folder = f"{mm}_{dd}_{yyyy}"
     path = rrl.resolve_case_insensitive(
-        os.path.join(BASE_DIR, "purchase_room", folder, file_name + ".pdf")
+        os.path.join(DATA_DIR, "purchases", file_name + ".pdf")
     )
+    if not os.path.exists(path):
+        # Fallback: older purchases in legacy purchase_room/<date>/ layout
+        ddmmyyyy = file_name[-8:]
+        dd, mm, yyyy = ddmmyyyy[:2], ddmmyyyy[2:4], ddmmyyyy[4:]
+        folder = f"{mm}_{dd}_{yyyy}"
+        path = rrl.resolve_case_insensitive(
+            os.path.join(BASE_DIR, "purchase_room", folder, file_name + ".pdf")
+        )
     if not os.path.exists(path):
         return jsonify({"ok": False, "error": "not found"}), 404
     return send_file(path, mimetype="application/pdf")

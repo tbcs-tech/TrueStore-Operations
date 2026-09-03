@@ -2462,3 +2462,19 @@ def set_business_profile(data):
         """, (k, val))
     conn.commit()
     conn.close()
+
+
+def change_user_password(user_id, new_password):
+    """Update a user's password hash."""
+    conn = get_conn()
+    conn.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (generate_password_hash(new_password), user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def admin_reset_user_password(user_id, new_password):
+    """Admin resets another user's password."""
+    return change_user_password(user_id, new_password)

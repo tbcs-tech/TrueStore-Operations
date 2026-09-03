@@ -67,6 +67,10 @@
   <div class="toolbar">
     <button class="btn outline small" onclick="addSheet()">+ Add Sheet</button>
     <a class="btn outline small" href="/settings/excel/{{ file_key }}/download">Download .xlsx</a>
+    <form method="post" action="/settings/excel/{{ file_key }}/upload" enctype="multipart/form-data" style="display:inline-flex;gap:4px;align-items:center;">
+      <input type="file" name="file" accept=".xlsx,.xls" style="font-size:11px;max-width:180px;">
+      <button class="btn outline small" type="submit">Upload &amp; Replace</button>
+    </form>
     <div class="spacer"></div>
     <span id="statusMsg" class="status hidden"></span>
     <button class="btn accent" id="saveBtn" onclick="saveAll()">Save Changes</button>

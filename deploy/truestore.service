@@ -1,32 +1,23 @@
-# Example systemd service for TrueStore Operations (Linux, gunicorn).
+# Systemd service for TrueStore Operations (gunicorn).
 #
-# This runs alongside your other 5-6 apps as an independent, isolated
-# service - it does NOT touch or restart anything else on the droplet.
-# Before enabling: confirm port 8010 is actually free (see
-# nginx_truestore.conf's header comment for how to check) and change it
-# here + in nginx_truestore.conf together if it's taken.
-#
-# Copy to /etc/systemd/system/truestore.service, edit the paths/user/port
-# below, then:
+# Customize: User/Group, WorkingDirectory, SECRET_KEY, and port.
+# Then:
+#   sudo cp deploy/truestore.service /etc/systemd/system/tsopr.service
 #   sudo systemctl daemon-reload
-#   sudo systemctl enable --now truestore
-#   sudo systemctl status truestore
-#   sudo journalctl -u truestore -f      # tail logs
-#
-# See README.md "Deploying to production" for the full walkthrough.
+#   sudo systemctl enable --now tsopr
 
 [Unit]
-Description=TrueStore Operations
+Description=TrueStore Operations (Gunicorn)
 After=network.target
 
 [Service]
 Type=simple
-User=truestore
-Group=truestore
-WorkingDirectory=/opt/truestore/receivables_dashboard
+User=tsopr
+Group=tsopr
+WorkingDirectory=/opt/tsopr/app
 Environment="FLASK_ENV=production"
 Environment="SECRET_KEY=REPLACE_WITH_A_LONG_RANDOM_VALUE"
-ExecStart=/opt/truestore/receivables_dashboard/.venv/bin/gunicorn -w 4 --capture-output -b 127.0.0.1:8010 wsgi:app
+ExecStart=/opt/tsopr/app/.venv/bin/gunicorn -w 4 --capture-output -b 127.0.0.1:8020 wsgi:app
 Restart=on-failure
 RestartSec=5
 

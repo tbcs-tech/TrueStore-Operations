@@ -703,7 +703,7 @@
       {% endif %}
       {% if logged_in_user %}
       <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">
-        {{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) · <a href="/logout" style="color:var(--ink-soft);">log out</a>
+        {{ logged_in_user.username }} ({{ role_labels.get(logged_in_user.role, logged_in_user.role) }}) · <a href="/change-password" style="color:var(--ink-soft);">change password</a> · <a href="/logout" style="color:var(--ink-soft);">log out</a>
       </span>
       {% endif %}
     </div>

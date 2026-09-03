@@ -194,9 +194,21 @@
     {% if not sales_log_exists %}<span style="font-size:12px;color:var(--ink-soft,#5c645f);"> — no sales_log.xlsx found</span>{% endif %}
     {% if not billdesk_exists %}<span style="font-size:12px;color:var(--ink-soft,#5c645f);"> — no billdesk.xlsx found (upload via New Bill)</span>{% endif %}
   </form>
-  <div style="margin-top:10px;">
+  <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
     <a class="btn outline" href="/settings/excel/billdesk">Open &amp; Edit billdesk.xlsx</a>
     <a class="btn outline" href="/settings/excel/sales_log">Open &amp; Edit sales_log.xlsx</a>
+  </div>
+  <div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;">
+    <form method="post" action="/settings/excel/billdesk/upload" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;">
+      <span style="font-size:11px;color:var(--ink-soft);">Upload billdesk.xlsx:</span>
+      <input type="file" name="file" accept=".xlsx,.xls" style="font-size:11px;max-width:180px;">
+      <button class="btn outline" type="submit" style="font-size:11px;padding:5px 10px;">Upload</button>
+    </form>
+    <form method="post" action="/settings/excel/sales_log/upload" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;">
+      <span style="font-size:11px;color:var(--ink-soft);">Upload sales_log.xlsx:</span>
+      <input type="file" name="file" accept=".xlsx,.xls" style="font-size:11px;max-width:180px;">
+      <button class="btn outline" type="submit" style="font-size:11px;padding:5px 10px;">Upload</button>
+    </form>
   </div>
 
   <div class="section-eyebrow" style="margin-top:34px;">Custom Fields</div>

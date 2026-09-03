@@ -87,6 +87,10 @@
             <form method="post" action="/admin/users/{{ u.id }}/toggle-active" style="display:inline;">
               <button class="toggle-btn" type="submit">{{ 'disable' if u.active else 'enable' }}</button>
             </form>
+            <form method="post" action="/admin/users/{{ u.id }}/reset-password" style="display:inline;margin-left:6px;">
+              <input type="password" name="new_password" placeholder="new password" minlength="8" required style="width:120px;font-size:11px;padding:4px 6px;">
+              <button class="toggle-btn" type="submit" style="color:var(--overdue,#a3452e);">Reset</button>
+            </form>
             {% if u.role == 'field_staff' %}
             <a href="/admin/users/{{ u.username }}/assignments" style="font-family:'IBM Plex Mono',monospace;font-size:11px;margin-left:8px;">Assignments</a>
             {% endif %}
