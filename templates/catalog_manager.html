@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalog Manager · TrueStore Operations</title>
+<link rel="stylesheet" href="/static/mobile.css?v=3">
+<link rel="stylesheet" href="/static/global.css?v=1">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+  :root{ --paper:#f6f3ec; --paper-raised:#fffdf8; --ink:#1c2321; --ink-soft:#5c645f; --rule:#e2dccb; --rule-strong:#c9c2ab; --overdue:#a3452e; --overdue-soft:#f3e3dd; --paid:#3f6b4f; --paid-soft:#e2ede4; --accent:#C08A2E; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .wrap{max-width:1200px;margin:0 auto;padding:28px 24px 80px;}
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .top-nav a{color:var(--ink-soft);text-decoration:none;border:1px solid var(--rule-strong);padding:6px 12px;border-radius:2px;}
+  h1{font-family:'Fraunces',serif;font-size:26px;margin:0 0 4px;}
+  .subtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);margin-bottom:20px;line-height:1.5;}
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;border-radius:2px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn.small{padding:5px 10px;font-size:11px;}
+  .btn.outline{background:transparent;color:var(--ink);}
+  .btn.accent{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn.danger{background:var(--overdue);border-color:var(--overdue);color:#fff;}
+  .btn.success{background:var(--paid);border-color:var(--paid);color:#fff;}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:0;border-bottom:2px solid var(--ink);}
+  .tab{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 14px;background:var(--paper);border:1px solid var(--rule-strong);border-bottom:none;border-radius:3px 3px 0 0;cursor:pointer;color:var(--ink-soft);}
+  .tab.active{background:var(--paper-raised);color:var(--ink);font-weight:600;border-color:var(--ink);position:relative;top:2px;}
+  .panel{display:none;background:var(--paper-raised);border:1px solid var(--rule-strong);border-top:none;overflow:auto;max-height:70vh;}
+  .panel.active{display:block;}
+  table{width:100%;border-collapse:collapse;}
+  th{position:sticky;top:0;background:var(--ink);color:var(--paper);font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;padding:7px 8px;text-align:left;z-index:2;white-space:nowrap;}
+  td{padding:6px 8px;border-bottom:1px solid var(--rule);font-size:12.5px;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr.suspended-row{opacity:0.4;}
+  tr.suspended-row td{background:var(--overdue-soft);}
+  .sheet-header{display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--rule-strong);background:var(--paper);}
+  .sheet-header .sheet-name{font-family:'Fraunces',serif;font-size:15px;font-weight:600;}
+  .sheet-header .count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+  .toolbar .spacer{flex:1;}
+  .search-input{font-size:13px;padding:7px 10px;border:1px solid var(--rule-strong);border-radius:2px;width:250px;}
+  .status-bar{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);padding:6px 10px;background:var(--paper);border:1px solid var(--rule-strong);border-top:none;}
+  /* Toggle switch */
+  .toggle{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;}
+  .toggle input{opacity:0;width:0;height:0;}
+  .toggle .slider{position:absolute;inset:0;background:var(--rule-strong);border-radius:10px;cursor:pointer;transition:all 0.2s;}
+  .toggle .slider::before{content:'';position:absolute;height:16px;width:16px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:all 0.2s;}
+  .toggle input:checked + .slider{background:var(--paid);}
+  .toggle input:checked + .slider::before{transform:translateX(16px);}
+  .select-all-bar{display:flex;gap:10px;align-items:center;padding:8px 10px;background:var(--paper);border-bottom:1px solid var(--rule);font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .flash{padding:10px 12px;border-radius:2px;font-size:12.5px;margin-bottom:14px;background:var(--paid-soft);color:var(--paid);border:1px solid var(--paid);display:none;}
+</style>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+</head>
+<body>
+<div class="wrap">
+  <div class="top-nav">
+    <a href="/settings">&larr; Settings</a>
+    <span>TrueStore Operations</span>
+  </div>
+  <h1>Catalog Manager</h1>
+  <div class="subtitle">
+    Toggle products, customers, and vendors on/off. Suspended entries are hidden from all selection UIs
+    across the app (bills, purchases, deliveries) but their data and history are preserved. Rename categories to
+    reorganize products.
+  </div>
+
+  <div id="flashMsg" class="flash"></div>
+
+  <div class="toolbar">
+    <input type="text" class="search-input" id="searchBox" placeholder="Search products, customers, vendors..." oninput="filterAll()">
+    <div class="spacer"></div>
+    <span id="selectionInfo" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);"></span>
+    <button class="btn small danger" id="bulkSuspendBtn" onclick="bulkAction(true)" style="display:none;">Suspend selected</button>
+    <button class="btn small success" id="bulkEnableBtn" onclick="bulkAction(false)" style="display:none;">Enable selected</button>
+  </div>
+
+  <div class="tabs" id="tabsRow"></div>
+  <div id="panelsRow"></div>
+</div>
+
+<script>
+const products = {{ products|tojson }};
+const customers = {{ customers|tojson }};
+const vendors = {{ vendors|tojson }};
+const sheets = {{ sheets|tojson }};
+let activeTab = sheets.length > 0 ? sheets[0] : 'Customers';
+let selected = new Set(); /* "product:123", "customer:C001", "vendor:V001" */
+
+function flash(msg, isError){
+  const el = document.getElementById('flashMsg');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.background = isError ? 'var(--overdue-soft)' : 'var(--paid-soft)';
+  el.style.color = isError ? 'var(--overdue)' : 'var(--paid)';
+  el.style.borderColor = isError ? 'var(--overdue)' : 'var(--paid)';
+  setTimeout(function(){ el.style.display = 'none'; }, 4000);
+}
+
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function render(){
+  const tabsRow = document.getElementById('tabsRow');
+  const panelsRow = document.getElementById('panelsRow');
+  tabsRow.innerHTML = '';
+  panelsRow.innerHTML = '';
+  const q = (document.getElementById('searchBox').value || '').toLowerCase();
+
+  /* Product sheets */
+  sheets.forEach(function(sheet){
+    const items = products.filter(function(p){ return p.sheet === sheet; });
+    addTab(sheet, items.length, sheet === activeTab);
+    if(sheet === activeTab){
+      const filtered = q ? items.filter(function(p){ return (p.item_name||'').toLowerCase().includes(q) || (p.item_description||'').toLowerCase().includes(q) || (p.hsn||'').toLowerCase().includes(q); }) : items;
+      panelsRow.appendChild(buildProductPanel(sheet, filtered));
+    }
+  });
+
+  /* Customers tab */
+  addTab('Customers', customers.length, activeTab === 'Customers');
+  if(activeTab === 'Customers'){
+    const filtered = q ? customers.filter(function(c){ return (c.name||'').toLowerCase().includes(q) || (c.customer_id||'').toLowerCase().includes(q); }) : customers;
+    panelsRow.appendChild(buildCustomerPanel(filtered));
+  }
+
+  /* Vendors tab */
+  addTab('Vendors', vendors.length, activeTab === 'Vendors');
+  if(activeTab === 'Vendors'){
+    const filtered = q ? vendors.filter(function(v){ return (v.name||'').toLowerCase().includes(q) || (v.vendor_id||'').toLowerCase().includes(q); }) : vendors;
+    panelsRow.appendChild(buildVendorPanel(filtered));
+  }
+
+  updateSelectionUI();
+}
+
+function addTab(label, count, isActive){
+  const tab = document.createElement('div');
+  tab.className = 'tab' + (isActive ? ' active' : '');
+  tab.textContent = label + ' (' + count + ')';
+  tab.onclick = function(){ activeTab = label; render(); };
+  document.getElementById('tabsRow').appendChild(tab);
+}
+
+function buildProductPanel(sheet, items){
+  const panel = document.createElement('div');
+  panel.className = 'panel active';
+
+  /* Sheet header with rename */
+  const header = document.createElement('div');
+  header.className = 'sheet-header';
+  header.innerHTML = '<span class="sheet-name">' + esc(sheet) + '</span>' +
+    '<span class="count">' + items.length + ' products</span>' +
+    '<button class="btn small outline" onclick="renameSheet(\'' + esc(sheet).replace(/'/g,"\\'") + '\')">Rename Category</button>';
+  panel.appendChild(header);
+
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th style="width:30px;"><input type="checkbox" onchange="toggleSelectAll(this,\'product\',\'' + esc(sheet) + '\')"></th><th>Active</th><th>Item Name</th><th>HSN</th><th class="num">Stock</th><th class="num">MRP</th><th class="num">GST%</th><th class="num">Cost</th><th class="num">Sale</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  items.forEach(function(p){
+    const key = 'product:' + p.id;
+    const tr = document.createElement('tr');
+    tr.className = p.suspended ? 'suspended-row' : '';
+    tr.innerHTML =
+      '<td><input type="checkbox" ' + (selected.has(key) ? 'checked' : '') + ' onchange="toggleSelect(\'' + key + '\', this.checked)"></td>' +
+      '<td><label class="toggle"><input type="checkbox" ' + (p.suspended ? '' : 'checked') + ' onchange="toggleOne(\'product\',' + p.id + ',this.checked)"><span class="slider"></span></label></td>' +
+      '<td>' + esc(p.item_name) + (p.item_description ? ' — ' + esc(p.item_description) : '') + '</td>' +
+      '<td>' + esc(p.hsn) + '</td>' +
+      '<td class="num">' + p.quantity + '</td>' +
+      '<td class="num">' + esc(p.mrp) + '</td>' +
+      '<td class="num">' + p.gst_pct + '%</td>' +
+      '<td class="num">₹' + Number(p.cost_price).toFixed(2) + '</td>' +
+      '<td class="num">₹' + Number(p.sale_price).toFixed(2) + '</td>';
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  panel.appendChild(table);
+  return panel;
+}
+
+function buildCustomerPanel(items){
+  const panel = document.createElement('div');
+  panel.className = 'panel active';
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th style="width:30px;"><input type="checkbox" onchange="toggleSelectAll(this,\'customer\')"></th><th>Active</th><th>ID</th><th>Name</th><th>Category</th><th>Contact</th><th>GSTN</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  items.forEach(function(c){
+    const key = 'customer:' + c.customer_id;
+    const tr = document.createElement('tr');
+    tr.className = c.suspended ? 'suspended-row' : '';
+    tr.innerHTML =
+      '<td><input type="checkbox" ' + (selected.has(key) ? 'checked' : '') + ' onchange="toggleSelect(\'' + key + '\', this.checked)"></td>' +
+      '<td><label class="toggle"><input type="checkbox" ' + (c.suspended ? '' : 'checked') + ' onchange="toggleOne(\'customer\',\'' + esc(c.customer_id) + '\',this.checked)"><span class="slider"></span></label></td>' +
+      '<td>' + esc(c.customer_id) + '</td>' +
+      '<td>' + esc(c.name) + '</td>' +
+      '<td>' + esc(c.category || '') + '</td>' +
+      '<td>' + esc(c.contact_number || '') + '</td>' +
+      '<td>' + esc(c.gstn || '—') + '</td>';
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  panel.appendChild(table);
+  return panel;
+}
+
+function buildVendorPanel(items){
+  const panel = document.createElement('div');
+  panel.className = 'panel active';
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th style="width:30px;"><input type="checkbox" onchange="toggleSelectAll(this,\'vendor\')"></th><th>Active</th><th>ID</th><th>Name</th><th>Category</th><th>Contact</th><th>GSTN</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  items.forEach(function(v){
+    const key = 'vendor:' + v.vendor_id;
+    const tr = document.createElement('tr');
+    tr.className = v.suspended ? 'suspended-row' : '';
+    tr.innerHTML =
+      '<td><input type="checkbox" ' + (selected.has(key) ? 'checked' : '') + ' onchange="toggleSelect(\'' + key + '\', this.checked)"></td>' +
+      '<td><label class="toggle"><input type="checkbox" ' + (v.suspended ? '' : 'checked') + ' onchange="toggleOne(\'vendor\',\'' + esc(v.vendor_id) + '\',this.checked)"><span class="slider"></span></label></td>' +
+      '<td>' + esc(v.vendor_id) + '</td>' +
+      '<td>' + esc(v.name) + '</td>' +
+      '<td>' + esc(v.category || '') + '</td>' +
+      '<td>' + esc(v.contact_number || '') + '</td>' +
+      '<td>' + esc(v.gstn || '—') + '</td>';
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  panel.appendChild(table);
+  return panel;
+}
+
+/* ── Single toggle ────────────────────────────────────────────────────────── */
+function toggleOne(type, id, isChecked){
+  /* isChecked = true means user turned ON = active = suspended=false */
+  const suspended = !isChecked;
+  fetch('/settings/catalog/toggle', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({type: type, ids: [id], suspended: suspended})
+  }).then(function(r){ return r.json(); }).then(function(res){
+    if(!res.ok){ flash('Error: ' + (res.error||'failed'), true); return; }
+    /* Update local data */
+    if(type === 'product'){
+      const p = products.find(function(x){ return x.id === id; });
+      if(p) p.suspended = suspended ? 1 : 0;
+    } else if(type === 'customer'){
+      const c = customers.find(function(x){ return x.customer_id === id; });
+      if(c) c.suspended = suspended ? 1 : 0;
+    } else {
+      const v = vendors.find(function(x){ return x.vendor_id === id; });
+      if(v) v.suspended = suspended ? 1 : 0;
+    }
+    render();
+    flash(suspended ? 'Suspended' : 'Enabled');
+  });
+}
+
+/* ── Checkbox selection ───────────────────────────────────────────────────── */
+function toggleSelect(key, checked){
+  if(checked) selected.add(key); else selected.delete(key);
+  updateSelectionUI();
+}
+
+function toggleSelectAll(checkbox, type, sheet){
+  const rows = type === 'product'
+    ? products.filter(function(p){ return !sheet || p.sheet === sheet; })
+    : type === 'customer' ? customers : vendors;
+  rows.forEach(function(item){
+    const id = type === 'product' ? item.id : (type === 'customer' ? item.customer_id : item.vendor_id);
+    const key = type + ':' + id;
+    if(checkbox.checked) selected.add(key); else selected.delete(key);
+  });
+  render();
+}
+
+function updateSelectionUI(){
+  const count = selected.size;
+  document.getElementById('selectionInfo').textContent = count > 0 ? count + ' selected' : '';
+  document.getElementById('bulkSuspendBtn').style.display = count > 0 ? '' : 'none';
+  document.getElementById('bulkEnableBtn').style.display = count > 0 ? '' : 'none';
+}
+
+/* ── Bulk suspend/enable ──────────────────────────────────────────────────── */
+function bulkAction(suspend){
+  const grouped = {};
+  selected.forEach(function(key){
+    const parts = key.split(':');
+    const type = parts[0];
+    const id = parts.slice(1).join(':');
+    if(!grouped[type]) grouped[type] = [];
+    grouped[type].push(type === 'product' ? parseInt(id) : id);
+  });
+
+  const promises = Object.keys(grouped).map(function(type){
+    return fetch('/settings/catalog/toggle', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({type: type, ids: grouped[type], suspended: suspend})
+    }).then(function(r){ return r.json(); });
+  });
+
+  Promise.all(promises).then(function(results){
+    if(results.every(function(r){ return r.ok; })){
+      /* Update local data */
+      selected.forEach(function(key){
+        const parts = key.split(':');
+        const type = parts[0];
+        const id = parts.slice(1).join(':');
+        const list = type === 'product' ? products : type === 'customer' ? customers : vendors;
+        const idKey = type === 'product' ? 'id' : type === 'customer' ? 'customer_id' : 'vendor_id';
+        const match = list.find(function(x){ return String(x[idKey]) === String(id); });
+        if(match) match.suspended = suspend ? 1 : 0;
+      });
+      selected.clear();
+      render();
+      flash((suspend ? 'Suspended' : 'Enabled') + ' ' + Object.values(grouped).reduce(function(s,a){return s+a.length;},0) + ' items');
+    } else {
+      flash('Some operations failed', true);
+    }
+  });
+}
+
+/* ── Rename sheet ─────────────────────────────────────────────────────────── */
+function renameSheet(oldName){
+  const newName = prompt('Rename category "' + oldName + '" to:', oldName);
+  if(!newName || newName === oldName) return;
+  fetch('/settings/catalog/rename-sheet', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({old_name: oldName, new_name: newName})
+  }).then(function(r){ return r.json(); }).then(function(res){
+    if(!res.ok){ flash('Error: ' + (res.error||'failed'), true); return; }
+    /* Update local data */
+    products.forEach(function(p){ if(p.sheet === oldName) p.sheet = newName; });
+    const idx = sheets.indexOf(oldName);
+    if(idx >= 0) sheets[idx] = newName;
+    activeTab = newName;
+    render();
+    flash('Renamed "' + oldName + '" → "' + newName + '" (' + res.updated + ' products)');
+  });
+}
+
+function filterAll(){ render(); }
+
+render();
+</script>
+</body>
+</html>

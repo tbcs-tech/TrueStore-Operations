@@ -127,9 +127,6 @@
             <input type="text" id="customerSearch" placeholder="Search by name or customer ID..." autocomplete="off">
             <div class="ac-results" id="customerResults"></div>
           </div>
-          <select id="customerCategoryFilter" style="max-width:170px;" onchange="renderCustomerSearchResults()">
-            <option value="">All banks/groups</option>
-          </select>
           <button class="cp-browse-btn" type="button" onclick="browseCustomers()">⊞ Browse</button>
         </div>
         <input type="hidden" id="customerId">
@@ -229,14 +226,6 @@ function loadCustomers(){
   fetch('/bills/api/customers').then(r => r.json()).then(res => {
     if(res.ok){ customers = res.customers; }
   });
-  fetch('/parties/customers/api/categories').then(r => r.json()).then(res => {
-    if(res.ok){
-      customerCategoryOptions = res.categories;
-      const catSelect = document.getElementById('customerCategoryFilter');
-      catSelect.innerHTML = '<option value="">All banks/groups</option>' +
-        res.categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-    }
-  });
 }
 
 function loadProducts(){
@@ -258,11 +247,9 @@ if(customerSearch){
   customerSearch.addEventListener('input', renderCustomerSearchResults);
   function renderCustomerSearchResults(){
     const q = customerSearch.value.trim().toLowerCase();
-    const cat = document.getElementById('customerCategoryFilter').value;
-    if(q.length < 2 && !cat){ customerResults.classList.remove('open'); return; }
+    if(q.length < 2){ customerResults.classList.remove('open'); return; }
     const matches = customers.filter(c =>
-      (!q || (c.name || '').toLowerCase().includes(q) || (c.customer_id || '').toLowerCase().includes(q)) &&
-      (!cat || (c.category || '').toLowerCase() === cat.toLowerCase())
+      (c.name || '').toLowerCase().includes(q) || (c.customer_id || '').toLowerCase().includes(q)
     ).slice(0, 20);
     customerResults.innerHTML = matches.map(c =>
       `<div class="ac-item" onclick='selectCustomer(${JSON.stringify(c.customer_id)})'>

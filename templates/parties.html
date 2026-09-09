@@ -78,18 +78,21 @@
     </thead>
     <tbody id="partiesTbody">
       {% for item in items %}
-      <tr>
+      <tr style="{{ 'opacity:0.45;' if item.suspended }}">
         <td>{{ item.customer_id if party_type=='customer' else item.vendor_id }}</td>
-        <td>{{ item.name }}</td>
+        <td>{{ item.name }}{% if item.suspended %} <span style="font-size:10px;color:var(--overdue,#a3452e);font-weight:600;">SUSPENDED</span>{% endif %}</td>
         <td>{% if item.category %}<span class="pill">{{ item.category }}</span>{% endif %}</td>
         <td>{{ item.contact_number }}</td>
         <td>{{ item.gstn or '—' }}</td>
         {% set item_id = item.customer_id if party_type=='customer' else item.vendor_id %}
         {% for f in custom_fields %}<td>{{ custom_values.get(item_id, {}).get(f.field_key, '') }}</td>{% endfor %}
-        <td>
+        <td style="white-space:nowrap;">
           <a class="btn small outline" href="/parties/{{ 'customers' if party_type=='customer' else 'vendors' }}/edit/{{ item_id }}">Edit</a>
           <a class="btn small outline" href="/parties/{{ 'customers' if party_type=='customer' else 'vendors' }}/{{ item_id }}/ledger">Ledger</a>
           {% if party_type == 'vendor' %}<a class="btn small outline" href="/parties/vendors/{{ item_id }}/products">Products</a>{% endif %}
+          <form method="post" action="/parties/{{ 'customers' if party_type=='customer' else 'vendors' }}/{{ item_id }}/toggle-suspend" style="display:inline;">
+            <button class="btn small outline" type="submit" style="{{ 'color:var(--paid,#3f6b4f);' if item.suspended else 'color:var(--overdue,#a3452e);' }}">{{ 'Enable' if item.suspended else 'Suspend' }}</button>
+          </form>
         </td>
       </tr>
       {% endfor %}

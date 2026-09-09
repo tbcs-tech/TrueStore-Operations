@@ -71,16 +71,21 @@
     </thead>
     <tbody id="productsTbody">
       {% for p in items %}
-      <tr>
+      <tr style="{{ 'opacity:0.45;' if p.suspended }}">
         <td><span class="pill">{{ p.sheet }}</span></td>
-        <td>{{ p.item_name }}{% if p.item_description %} — {{ p.item_description }}{% endif %}</td>
+        <td>{{ p.item_name }}{% if p.item_description %} — {{ p.item_description }}{% endif %}{% if p.suspended %} <span style="font-size:10px;color:var(--overdue,#a3452e);font-weight:600;">SUSPENDED</span>{% endif %}</td>
         <td>{{ p.hsn }}</td>
         <td class="num {{ 'warn-val' if p.quantity < 0 }}">{{ p.quantity }}</td>
         <td class="num">{{ p.gst_pct }}</td>
         <td class="num">₹{{ "{:,.2f}".format(p.cost_price) }}</td>
         <td class="num">₹{{ "{:,.2f}".format(p.sale_price) }}</td>
         {% for f in custom_fields %}<td{{ ' class="num"' | safe if f.field_type=='number' }}>{{ custom_values.get(p.id|string, {}).get(f.field_key, '') }}</td>{% endfor %}
-        <td><a class="btn small outline" href="/products/edit/{{ p.id }}">Edit</a></td>
+        <td style="white-space:nowrap;">
+          <a class="btn small outline" href="/products/edit/{{ p.id }}">Edit</a>
+          <form method="post" action="/products/{{ p.id }}/toggle-suspend" style="display:inline;">
+            <button class="btn small outline" type="submit" style="{{ 'color:var(--paid,#3f6b4f);' if p.suspended else 'color:var(--overdue,#a3452e);' }}">{{ 'Enable' if p.suspended else 'Suspend' }}</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

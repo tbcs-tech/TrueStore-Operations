@@ -843,6 +843,56 @@ def settings_excel_upload(file_key):
     return redirect(url_for("settings_excel_editor", file_key=file_key))
 
 
+@app.route("/settings/catalog")
+@login_required
+@role_required("admin")
+def settings_catalog_manager():
+    """DB-connected catalog manager — replaces raw Excel editing.
+    Shows products grouped by sheet/category, customers, and vendors
+    with inline toggle switches for suspend/enable."""
+    products = db.list_products(include_suspended=True)
+    customers = db.list_customers(include_suspended=True)
+    vendors = db.list_vendors(include_suspended=True)
+    sheets = db.list_product_sheets()
+    return render_template("catalog_manager.html",
+                            products=products, customers=customers,
+                            vendors=vendors, sheets=sheets)
+
+
+@app.route("/settings/catalog/toggle", methods=["POST"])
+@login_required
+@role_required("admin")
+def settings_catalog_toggle():
+    """Toggle suspend on one or more products/customers/vendors."""
+    data = request.get_json(silent=True) or {}
+    entity_type = data.get("type")  # "product", "customer", "vendor"
+    ids = data.get("ids", [])
+    suspended = data.get("suspended", True)
+    if not ids or entity_type not in ("product", "customer", "vendor"):
+        return jsonify({"ok": False, "error": "invalid request"}), 400
+    if entity_type == "product":
+        db.bulk_set_product_suspended(ids, suspended)
+    elif entity_type == "customer":
+        db.bulk_set_customer_suspended(ids, suspended)
+    elif entity_type == "vendor":
+        db.bulk_set_vendor_suspended(ids, suspended)
+    return jsonify({"ok": True})
+
+
+@app.route("/settings/catalog/rename-sheet", methods=["POST"])
+@login_required
+@role_required("admin")
+def settings_catalog_rename_sheet():
+    """Rename a product category/sheet — updates all products in it."""
+    data = request.get_json(silent=True) or {}
+    old_name = (data.get("old_name") or "").strip()
+    new_name = (data.get("new_name") or "").strip()
+    if not old_name or not new_name:
+        return jsonify({"ok": False, "error": "provide old and new names"}), 400
+    count = db.rename_product_sheet(old_name, new_name)
+    return jsonify({"ok": True, "updated": count})
+
+
 @app.route("/settings/business-profile", methods=["POST"])
 @login_required
 @role_required("admin")
@@ -1661,10 +1711,10 @@ def parties_page():
     category = request.args.get("category", "all")
 
     if party_type == "customer":
-        items = db.list_customers()
+        items = db.list_customers(include_suspended=True)
         categories = [c["label"] for c in db.list_customer_category_options()]
     else:
-        items = db.list_vendors()
+        items = db.list_vendors(include_suspended=True)
         categories = [c["label"] for c in db.list_vendor_category_options()]
 
     if category != "all":
@@ -1878,8 +1928,9 @@ def vendor_products_page(vendor_id):
 def products_manage():
     q = request.args.get("q", "").strip().lower()
     sheet = request.args.get("sheet", "all")
+    show_suspended = request.args.get("show_suspended", "1")  # show all by default on manage page
 
-    items = db.list_products()
+    items = db.list_products(include_suspended=(show_suspended == "1"))
     sheets = db.list_product_sheets()
     if sheet != "all":
         items = [p for p in items if p["sheet"] == sheet]
@@ -1892,7 +1943,8 @@ def products_manage():
 
     return render_template("products_manage.html", items=items, sheets=sheets,
                             q=request.args.get("q", ""), sheet=sheet, total_count=len(items),
-                            custom_fields=custom_fields, custom_values=custom_values)
+                            custom_fields=custom_fields, custom_values=custom_values,
+                            show_suspended=show_suspended)
 
 
 @app.route("/products/new", methods=["GET", "POST"])
@@ -1969,6 +2021,36 @@ def products_form(product_id=None):
 
     return render_template("product_form.html", existing=existing, sheets=db.list_product_sheets(), form=None,
                             custom_fields=custom_fields, custom_values=custom_values)
+
+
+@app.route("/products/<int:product_id>/toggle-suspend", methods=["POST"])
+@login_required
+@role_required("admin")
+def products_toggle_suspend(product_id):
+    new_val = db.toggle_product_suspended(product_id)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "suspended": new_val})
+    return redirect(url_for("products_manage"))
+
+
+@app.route("/parties/customers/<customer_id>/toggle-suspend", methods=["POST"])
+@login_required
+@role_required("admin")
+def customers_toggle_suspend(customer_id):
+    new_val = db.toggle_customer_suspended(customer_id)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "suspended": new_val})
+    return redirect(url_for("parties_page"))
+
+
+@app.route("/parties/vendors/<vendor_id>/toggle-suspend", methods=["POST"])
+@login_required
+@role_required("admin")
+def vendors_toggle_suspend(vendor_id):
+    new_val = db.toggle_vendor_suspended(vendor_id)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "suspended": new_val})
+    return redirect(url_for("parties_page"))
 
 
 @app.route("/products/pending")

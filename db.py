@@ -359,6 +359,14 @@ def init_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass
+    # Add suspended flag to products, customers, vendors.
+    # Default 0 = active. 1 = suspended (hidden from selection UIs but data preserved).
+    for tbl in ("products", "customers", "vendors"):
+        try:
+            cur.execute(f"ALTER TABLE {tbl} ADD COLUMN suspended INTEGER NOT NULL DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS delivery_receipts (
@@ -895,9 +903,13 @@ def upsert_customer(customer_id, name, contact_number="", address_details="", gs
     conn.close()
 
 
-def list_customers():
+def list_customers(include_suspended=False):
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM customers ORDER BY name").fetchall()
+    q = "SELECT * FROM customers"
+    if not include_suspended:
+        q += " WHERE suspended = 0"
+    q += " ORDER BY name"
+    rows = conn.execute(q).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -932,9 +944,13 @@ def upsert_vendor(vendor_id, name, contact_number="", address_details="", gstn="
     conn.close()
 
 
-def list_vendors():
+def list_vendors(include_suspended=False):
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM vendors ORDER BY name").fetchall()
+    q = "SELECT * FROM vendors"
+    if not include_suspended:
+        q += " WHERE suspended = 0"
+    q += " ORDER BY name"
+    rows = conn.execute(q).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -1540,11 +1556,16 @@ def reject_pending_product(product_id):
     conn.close()
 
 
-def list_products(approved_only=False):
+def list_products(approved_only=False, include_suspended=False):
     conn = get_conn()
-    q = "SELECT * FROM products"
+    conditions = []
     if approved_only:
-        q += " WHERE approved = 1"
+        conditions.append("approved = 1")
+    if not include_suspended:
+        conditions.append("suspended = 0")
+    q = "SELECT * FROM products"
+    if conditions:
+        q += " WHERE " + " AND ".join(conditions)
     q += " ORDER BY sheet, item_name"
     rows = conn.execute(q).fetchall()
     conn.close()
@@ -1564,7 +1585,7 @@ def list_products_for_user(username):
     """
     conn = get_conn()
     rows = conn.execute(
-        "SELECT * FROM products WHERE approved = 1 OR created_by = ? ORDER BY sheet, item_name",
+        "SELECT * FROM products WHERE suspended = 0 AND (approved = 1 OR created_by = ?) ORDER BY sheet, item_name",
         (username,),
     ).fetchall()
     conn.close()
@@ -2478,3 +2499,68 @@ def change_user_password(user_id, new_password):
 def admin_reset_user_password(user_id, new_password):
     """Admin resets another user's password."""
     return change_user_password(user_id, new_password)
+
+
+# --------------------------------------------------------------------------- #
+# Suspend / unsuspend (products, customers, vendors)
+# --------------------------------------------------------------------------- #
+def toggle_product_suspended(product_id):
+    conn = get_conn()
+    conn.execute("UPDATE products SET suspended = CASE WHEN suspended = 0 THEN 1 ELSE 0 END WHERE id = ?", (product_id,))
+    conn.commit()
+    row = conn.execute("SELECT suspended FROM products WHERE id = ?", (product_id,)).fetchone()
+    conn.close()
+    return row["suspended"] if row else None
+
+
+def toggle_customer_suspended(customer_id):
+    conn = get_conn()
+    conn.execute("UPDATE customers SET suspended = CASE WHEN suspended = 0 THEN 1 ELSE 0 END WHERE customer_id = ?", (customer_id,))
+    conn.commit()
+    row = conn.execute("SELECT suspended FROM customers WHERE customer_id = ?", (customer_id,)).fetchone()
+    conn.close()
+    return row["suspended"] if row else None
+
+
+def toggle_vendor_suspended(vendor_id):
+    conn = get_conn()
+    conn.execute("UPDATE vendors SET suspended = CASE WHEN suspended = 0 THEN 1 ELSE 0 END WHERE vendor_id = ?", (vendor_id,))
+    conn.commit()
+    row = conn.execute("SELECT suspended FROM vendors WHERE vendor_id = ?", (vendor_id,)).fetchone()
+    conn.close()
+    return row["suspended"] if row else None
+
+
+def rename_product_sheet(old_name, new_name):
+    """Rename a product category/sheet — updates all products in that sheet."""
+    conn = get_conn()
+    conn.execute("UPDATE products SET sheet = ? WHERE sheet = ?", (new_name, old_name))
+    conn.commit()
+    count = conn.execute("SELECT changes()").fetchone()[0]
+    conn.close()
+    return count
+
+
+def bulk_set_product_suspended(product_ids, suspended):
+    """Set suspended flag for multiple products at once."""
+    conn = get_conn()
+    for pid in product_ids:
+        conn.execute("UPDATE products SET suspended = ? WHERE id = ?", (1 if suspended else 0, pid))
+    conn.commit()
+    conn.close()
+
+
+def bulk_set_customer_suspended(customer_ids, suspended):
+    conn = get_conn()
+    for cid in customer_ids:
+        conn.execute("UPDATE customers SET suspended = ? WHERE customer_id = ?", (1 if suspended else 0, cid))
+    conn.commit()
+    conn.close()
+
+
+def bulk_set_vendor_suspended(vendor_ids, suspended):
+    conn = get_conn()
+    for vid in vendor_ids:
+        conn.execute("UPDATE vendors SET suspended = ? WHERE vendor_id = ?", (1 if suspended else 0, vid))
+    conn.commit()
+    conn.close()

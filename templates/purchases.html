@@ -117,9 +117,6 @@
             <input type="text" id="vendorSearch" placeholder="Search by name or vendor ID..." autocomplete="off">
             <div class="ac-results" id="vendorResults"></div>
           </div>
-          <select id="vendorCategoryFilter" style="max-width:170px;" onchange="renderVendorSearchResults()">
-            <option value="">All categories</option>
-          </select>
           <button class="cp-browse-btn" type="button" onclick="browseVendors()">⊞ Browse</button>
         </div>
         <input type="hidden" id="vendorId">
@@ -176,14 +173,6 @@ document.addEventListener('DOMContentLoaded', function(){
   fetch('/purchases/api/vendors').then(r => r.json()).then(res => {
     if(res.ok){ vendors = res.vendors; }
   });
-  fetch('/parties/vendors/api/categories').then(r => r.json()).then(res => {
-    if(res.ok){
-      vendorCategoryOptions = res.categories;
-      const catSelect = document.getElementById('vendorCategoryFilter');
-      catSelect.innerHTML = '<option value="">All categories</option>' +
-        res.categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-    }
-  });
   fetch('/purchases/api/products').then(r => r.json()).then(res => { if(res.ok){ products = res.products; } });
 });
 
@@ -197,11 +186,9 @@ if(vendorSearch){
   vendorSearch.addEventListener('input', renderVendorSearchResults);
   function renderVendorSearchResults(){
     const q = vendorSearch.value.trim().toLowerCase();
-    const cat = document.getElementById('vendorCategoryFilter').value;
-    if(q.length < 2 && !cat){ vendorResults.classList.remove('open'); return; }
+    if(q.length < 2){ vendorResults.classList.remove('open'); return; }
     const matches = vendors.filter(v =>
-      (!q || (v.name || '').toLowerCase().includes(q) || (v.vendor_id || '').toLowerCase().includes(q)) &&
-      (!cat || (v.category || '').toLowerCase() === cat.toLowerCase())
+      (v.name || '').toLowerCase().includes(q) || (v.vendor_id || '').toLowerCase().includes(q)
     ).slice(0, 20);
     vendorResults.innerHTML = matches.map(v =>
       `<div class="ac-item" onclick='selectVendor(${JSON.stringify(v.vendor_id)})'>
