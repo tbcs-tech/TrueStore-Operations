@@ -758,9 +758,41 @@ def settings_excel_editor(file_key):
         flash("Unknown file.")
         return redirect(url_for("settings"))
     sheets = _read_workbook_as_json(path)
+
+    # For billdesk: load suspended states from DB so toggles reflect reality
+    disabled_rows_json = {}
+    if file_key == "billdesk":
+        all_products = db.list_products(include_suspended=True)
+        all_customers = db.list_customers(include_suspended=True)
+        all_vendors = db.list_vendors(include_suspended=True)
+        for sheet_name, rows in sheets.items():
+            disabled = {}
+            sn_upper = sheet_name.upper()
+            for r, row in enumerate(rows):
+                if r == 0:
+                    continue
+                if sn_upper == "CUSTPR":
+                    cid = row[1] if len(row) > 1 else ""
+                    match = [c for c in all_customers if c["customer_id"] == str(cid)]
+                    if match and match[0].get("suspended"):
+                        disabled[str(r)] = True
+                elif sn_upper == "VENDOR":
+                    vid = row[1] if len(row) > 1 else ""
+                    match = [v for v in all_vendors if v["vendor_id"] == str(vid)]
+                    if match and match[0].get("suspended"):
+                        disabled[str(r)] = True
+                else:
+                    item_name = row[1] if len(row) > 1 else ""
+                    match = [p for p in all_products if p["item_name"] == str(item_name) and p["sheet"] == sheet_name]
+                    if match and match[0].get("suspended"):
+                        disabled[str(r)] = True
+            if disabled:
+                disabled_rows_json[sheet_name] = disabled
+
     return render_template("excel_editor.html", file_key=file_key,
                             file_label="billdesk.xlsx" if file_key == "billdesk" else "sales_log.xlsx",
                             sheets_json=json.dumps(sheets),
+                            disabled_rows_json=json.dumps(disabled_rows_json),
                             file_exists=os.path.exists(path))
 
 
@@ -774,6 +806,7 @@ def settings_excel_save(file_key):
 
     payload = request.get_json(silent=True) or {}
     sheets = payload.get("sheets")
+    disabled_rows = payload.get("disabledRows", {})
     if not isinstance(sheets, dict) or not sheets:
         return jsonify({"ok": False, "error": "no sheet data received"}), 400
 
@@ -805,7 +838,41 @@ def settings_excel_save(file_key):
     except Exception as e:
         return jsonify({"ok": False, "error": f"save failed: {e}"}), 500
 
+    # For billdesk: sync disabled rows → DB suspended flags.
+    # Each product sheet row maps to a product by item_name (col B, index 1).
+    # CUSTPR/VENDOR sheets map to customers/vendors by ID (col B, index 1).
+    if file_key == "billdesk" and disabled_rows:
+        _sync_billdesk_suspended(sheets, disabled_rows)
+
     return jsonify({"ok": True})
+
+
+def _sync_billdesk_suspended(sheets_data, disabled_rows):
+    """Sync toggle states from Excel editor into DB suspended flags."""
+    for sheet_name, rows in sheets_data.items():
+        disabled_set = disabled_rows.get(sheet_name, {})
+        sn_upper = sheet_name.upper()
+
+        for r, row in enumerate(rows):
+            if r == 0:
+                continue  # skip header row
+            is_disabled = str(r) in disabled_set or r in disabled_set
+            if sn_upper == "CUSTPR":
+                cid = row[1] if len(row) > 1 else ""
+                if cid:
+                    db.bulk_set_customer_suspended([str(cid)], is_disabled)
+            elif sn_upper == "VENDOR":
+                vid = row[1] if len(row) > 1 else ""
+                if vid:
+                    db.bulk_set_vendor_suspended([str(vid)], is_disabled)
+            else:
+                # Product sheet — find by item_name (col B, index 1) + sheet
+                item_name = row[1] if len(row) > 1 else ""
+                if item_name:
+                    products = db.list_products(include_suspended=True)
+                    match = [p for p in products if p["item_name"] == str(item_name) and p["sheet"] == sheet_name]
+                    if match:
+                        db.bulk_set_product_suspended([match[0]["id"]], is_disabled)
 
 
 @app.route("/settings/excel/<file_key>/download")

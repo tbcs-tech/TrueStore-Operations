@@ -41,6 +41,14 @@
   .cell-input{width:100%;min-width:90px;border:none;padding:6px 8px;font-size:12.5px;font-family:'Inter',sans-serif;background:transparent;color:var(--ink);}
   .cell-input:focus{outline:2px solid var(--accent);outline-offset:-2px;background:#fff;}
   .row-del-btn{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--overdue);cursor:pointer;background:none;border:none;padding:2px 4px;}
+  .toggle{position:relative;display:inline-block;width:34px;height:18px;}
+  .toggle input{opacity:0;width:0;height:0;}
+  .toggle .slider{position:absolute;inset:0;background:var(--rule-strong);border-radius:9px;cursor:pointer;transition:all 0.2s;}
+  .toggle .slider::before{content:'';position:absolute;height:14px;width:14px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:all 0.2s;}
+  .toggle input:checked + .slider{background:var(--paid);}
+  .toggle input:checked + .slider::before{transform:translateX(16px);}
+  tr.row-disabled td{opacity:0.35;}
+  tr.row-disabled td.rownum, tr.row-disabled td:nth-child(2){opacity:1;}
   .sheet-footer{display:flex;gap:8px;padding:10px;border:1px solid var(--rule-strong);border-top:none;background:var(--paper);}
   .empty-note{padding:30px;text-align:center;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12px;}
   .row-actions-th{width:30px;}
@@ -84,6 +92,10 @@
 const FILE_KEY = {{ file_key|tojson }};
 let sheets = {{ sheets_json|safe }};
 let activeSheet = null;
+/* Track which rows are disabled (suspended) per sheet.
+   Format: disabledRows['SheetName'] = {'rowIndex': true, ...}
+   Row 0 (header) is never toggleable. Loaded from DB for billdesk. */
+let disabledRows = {{ disabled_rows_json|safe }};
 
 function esc(s){
   const d = document.createElement('div');
@@ -151,20 +163,37 @@ function buildGrid(name){
 
   const tbody = document.createElement('tbody');
   rows.forEach(function(row, r){
+    const isDisabled = disabledRows[name] && disabledRows[name][r];
     const tr = document.createElement('tr');
+    if(isDisabled) tr.className = 'row-disabled';
     const rownumTd = document.createElement('td');
     rownumTd.className = 'rownum';
     rownumTd.textContent = (r + 1);
     tr.appendChild(rownumTd);
 
-    const delTd = document.createElement('td');
-    const delBtn = document.createElement('button');
-    delBtn.className = 'row-del-btn';
-    delBtn.textContent = '✕';
-    delBtn.title = 'Delete row';
-    delBtn.onclick = function(){ deleteRow(name, r); };
-    delTd.appendChild(delBtn);
-    tr.appendChild(delTd);
+    /* Toggle switch instead of delete button */
+    const toggleTd = document.createElement('td');
+    toggleTd.style.textAlign = 'center';
+    if(r === 0){
+      /* Header row — no toggle, just label */
+      toggleTd.innerHTML = '<span style="font-size:9px;color:var(--ink-soft);">ON/OFF</span>';
+    } else {
+      const label = document.createElement('label');
+      label.className = 'toggle';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = !isDisabled;
+      checkbox.title = isDisabled ? 'Enable this row' : 'Suspend this row';
+      checkbox.addEventListener('change', function(){
+        toggleRow(name, r, !checkbox.checked);
+      });
+      const slider = document.createElement('span');
+      slider.className = 'slider';
+      label.appendChild(checkbox);
+      label.appendChild(slider);
+      toggleTd.appendChild(label);
+    }
+    tr.appendChild(toggleTd);
 
     for(let c = 0; c < maxCols; c++){
       const td = document.createElement('td');
@@ -197,6 +226,17 @@ function colLabel(i){
   return s;
 }
 
+function toggleRow(name, idx, disabled){
+  if(!disabledRows[name]) disabledRows[name] = {};
+  if(disabled){
+    disabledRows[name][idx] = true;
+  } else {
+    delete disabledRows[name][idx];
+  }
+  markDirty();
+  render();
+}
+
 function addRow(name){
   const maxCols = sheets[name].reduce(function(m, r){ return Math.max(m, r.length); }, 1);
   sheets[name].push(new Array(maxCols).fill(''));
@@ -205,8 +245,17 @@ function addRow(name){
 }
 
 function deleteRow(name, idx){
-  if(!confirm('Delete row ' + (idx + 1) + ' from ' + name + '?')) return;
+  /* Internal only — not exposed to UI anymore. Toggle is the user-facing action. */
   sheets[name].splice(idx, 1);
+  /* Shift disabled row indices above the deleted row */
+  const newDisabled = {};
+  Object.keys(disabledRows[name] || {}).forEach(function(k){
+    const i = parseInt(k);
+    if(i < idx) newDisabled[i] = true;
+    else if(i > idx) newDisabled[i - 1] = true;
+    /* skip i === idx — it's being deleted */
+  });
+  disabledRows[name] = newDisabled;
   markDirty();
   render();
 }
@@ -271,7 +320,7 @@ function saveAll(){
   fetch('/settings/excel/' + FILE_KEY + '/save', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({sheets: sheets})
+    body: JSON.stringify({sheets: sheets, disabledRows: disabledRows})
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
